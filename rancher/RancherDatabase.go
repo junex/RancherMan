@@ -34,6 +34,19 @@ func (Config) TableName() string {
 	return "config"
 }
 
+// Namespace 命名空间模型
+type Namespace struct {
+	ID          uint   `gorm:"primaryKey"`
+	Name        string `gorm:"size:30"`
+	Project     string `gorm:"size:30"`
+	Environment string `gorm:"size:20"`
+	Description string `gorm:"size:30"`
+}
+
+func (Namespace) TableName() string {
+	return "namespace"
+}
+
 // DatabaseManager 数据库管理器结构体
 type DatabaseManager struct {
 	db     *gorm.DB
@@ -79,7 +92,7 @@ func (dm *DatabaseManager) Close() error {
 
 // initDatabase 初始化数据库，创建必要的表
 func (dm *DatabaseManager) initDatabase() error {
-	return dm.db.AutoMigrate(&Workload{}, &Config{})
+	return dm.db.AutoMigrate(&Workload{}, &Config{}, &Namespace{})
 }
 
 // GetWorkloadDetailsByEnvNamespace 根据环境和命名空间获取工作负载详细信息
@@ -187,23 +200,34 @@ func (dm *DatabaseManager) GetWorkloadByID(id uint) (*Workload, error) {
 	return &workload, result.Error
 }
 
-// GetAllNamespaces 获取所有命名空间
-func (dm *DatabaseManager) GetAllNamespaces() ([]string, error) {
-	var namespaces []string
-	result := dm.db.Model(&Workload{}).Distinct().Pluck("namespace", &namespaces)
-	return namespaces, result.Error
-}
-
-// GetAllEnvironments 获取所有环境
-func (dm *DatabaseManager) GetAllEnvironments() ([]string, error) {
-	var environments []string
-	result := dm.db.Model(&Workload{}).Distinct().Pluck("environment", &environments)
-	return environments, result.Error
-}
-
 // GetWorkloadsByNamespace 根据命名空间获取工作负载列表
 func (dm *DatabaseManager) GetWorkloadsByNamespace(namespace string) ([]Workload, error) {
 	var workloads []Workload
 	result := dm.db.Where("namespace = ?", namespace).Find(&workloads)
 	return workloads, result.Error
+}
+
+// DeleteNamespaceByEnvironment 根据环境删除命名空间数据
+func (dm *DatabaseManager) DeleteNamespaceByEnvironment(environment string) (int64, error) {
+	result := dm.db.Where("environment = ?", environment).Delete(&Namespace{})
+	return result.RowsAffected, result.Error
+}
+
+// InsertNamespaces 批量插入命名空间数据
+func (dm *DatabaseManager) InsertNamespaces(namespaces []Namespace) error {
+	return dm.db.Transaction(func(tx *gorm.DB) error {
+		for _, namespace := range namespaces {
+			if err := tx.Create(&namespace).Error; err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+}
+
+// GetAllNamespacesDetail 获取所有命名空间详细信息
+func (dm *DatabaseManager) GetAllNamespacesDetail() ([]Namespace, error) {
+	var namespaces []Namespace
+	result := dm.db.Find(&namespaces)
+	return namespaces, result.Error
 }

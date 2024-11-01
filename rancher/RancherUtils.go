@@ -2,7 +2,6 @@ package rancher
 
 import (
 	"fmt"
-	"os"
 	"strconv"
 	"strings"
 
@@ -10,25 +9,27 @@ import (
 )
 
 type Environment struct {
-	ID       string
-	Name     string
-	BaseURL  string
-	Project  string
-	username string
-	password string
+	ID        string
+	Name      string
+	BaseURL   string
+	Project   string
+	Ip        string
+	username  string
+	password  string
+	nginxList []NginxMap
 }
 
-func loadConfig(db *DatabaseManager) map[string]interface{} {
+type NginxMap struct {
+	Name     string
+	BaseUrl  string
+	ConfPath string
+}
+
+func LoadConfigFromDb(db *DatabaseManager) map[string]interface{} {
 	configContent, _ := db.GetConfigContent(1)
 	if configContent == "" {
-		fmt.Println("读取配置文件: config.yml")
-		content, err := os.ReadFile("config.yml")
-		if err != nil {
-			panic(err)
-		}
-		configContent = string(content)
-		db.DeleteConfig(1)
-		db.InsertConfig(1, configContent)
+
+		return make(map[string]interface{})
 	}
 	var config map[string]interface{}
 	err := yaml.Unmarshal([]byte(configContent), &config)
@@ -38,58 +39,74 @@ func loadConfig(db *DatabaseManager) map[string]interface{} {
 	return config
 }
 
-func UpdateEnvironment(db *DatabaseManager, config map[string]interface{}, forceUpdate bool) {
-	for envName, envData := range config["environment"].(map[interface{}]interface{}) {
-		env := envData.(map[interface{}]interface{})
-		workloadCount, _ := db.GetWorkloadCountByEnvironment(envName.(string))
-		update := forceUpdate
-		if workloadCount == 0 {
-			update = true
-		}
-		if update {
-			environment, _ := GetEnvironmentFromConfig(config, envName.(string))
-			db.DeleteWorkloadByEnv(envName.(string))
+func SaveConfigToDb(db *DatabaseManager, content string) {
+	db.DeleteConfig(1)
+	db.InsertConfig(1, content)
+}
 
-			// Get nginx reverse proxy list
-			var nginxProxyList []ConfigEntry
-			for _, nginxConfig := range env["nginx"].(map[interface{}]interface{}) {
-				nginx := nginxConfig.(map[interface{}]interface{})
-				serviceBaseURL := nginx["base_url"].(string)
-				confPath := nginx["nginx_conf"].(string)
-				nginxConf, _ := GetConfigMaps(*environment, confPath)
-
-				configList, _ := ParseNginxConfig(serviceBaseURL, nginxConf)
-				nginxProxyList = append(nginxProxyList, configList...)
+func UpdateEnvironment(db *DatabaseManager, envName string, environment *Environment, forceUpdate bool) {
+	workloadCount, _ := db.GetWorkloadCountByEnvironment(environment.Name)
+	update := forceUpdate
+	if workloadCount == 0 {
+		update = true
+	}
+	if update {
+		// 更新namespace
+		var namespaceDBList []Namespace
+		db.DeleteNamespaceByEnvironment(envName)
+		allNamespaces, _ := GetNamespaceList(*environment)
+		var namespaceList []NamespaceResp
+		for _, ns := range allNamespaces {
+			if ns.ProjectId == environment.Project {
+				namespaceList = append(namespaceList, ns)
 			}
-			lookupDict := CreateLookupDict(nginxProxyList)
-			workloadList, _ := GetWorkloadsList(*environment)
-
-			var workloadsDBList []Workload
-			for _, workload := range workloadList {
-				var image, nodePort string
-				if len(workload.Containers) == 1 {
-					image = workload.Containers[0].Image
-				}
-				if len(workload.PublicEndpoints) > 0 {
-					ports := make([]string, len(workload.PublicEndpoints))
-					for i, endpoint := range workload.PublicEndpoints {
-						ports[i] = strconv.Itoa(endpoint.Port)
-					}
-					nodePort = strings.Join(ports, ",")
-				}
-				accessPath := LookupService(lookupDict, workload.Name, workload.NamespaceID)
-				workloadsDBList = append(workloadsDBList, Workload{
-					Environment: envName.(string),
-					Namespace:   workload.NamespaceID,
-					Name:        workload.Name,
-					Image:       image,
-					NodePort:    nodePort,
-					AccessPath:  accessPath,
-				})
-			}
-
-			db.InsertWorkloads(workloadsDBList)
 		}
+		for _, namespace := range namespaceList {
+			namespaceDBList = append(namespaceDBList, Namespace{
+				Name:        namespace.Name,
+				Environment: envName,
+				Project:     namespace.ProjectId,
+				Description: namespace.Description,
+			})
+		}
+		db.InsertNamespaces(namespaceDBList)
+		// 更新workload
+		db.DeleteWorkloadByEnv(envName)
+		// Get nginx reverse proxy list
+		var nginxProxyList []ConfigEntry
+		for _, nginxConfig := range environment.nginxList {
+			nginxConf, _ := GetConfigMaps(*environment, nginxConfig.ConfPath)
+
+			configList, _ := ParseNginxConfig(nginxConfig.BaseUrl, nginxConf)
+			nginxProxyList = append(nginxProxyList, configList...)
+		}
+		lookupDict := CreateLookupDict(nginxProxyList)
+		workloadList, _ := GetWorkloadList(*environment)
+
+		var workloadsDBList []Workload
+		for _, workload := range workloadList {
+			var image, nodePort string
+			if len(workload.Containers) == 1 {
+				image = workload.Containers[0].Image
+			}
+			if len(workload.PublicEndpoints) > 0 {
+				ports := make([]string, len(workload.PublicEndpoints))
+				for i, endpoint := range workload.PublicEndpoints {
+					ports[i] = strconv.Itoa(endpoint.Port)
+				}
+				nodePort = strings.Join(ports, ",")
+			}
+			accessPath := LookupService(lookupDict, workload.Name, workload.NamespaceID)
+			workloadsDBList = append(workloadsDBList, Workload{
+				Environment: envName,
+				Namespace:   workload.NamespaceID,
+				Name:        workload.Name,
+				Image:       image,
+				NodePort:    nodePort,
+				AccessPath:  accessPath,
+			})
+		}
+		db.InsertWorkloads(workloadsDBList)
 	}
 }
 
@@ -97,6 +114,7 @@ func GetEnvironmentFromConfig(config map[string]interface{}, envName string) (*E
 	// 从配置中获取environments部分
 	environments, ok := config["environment"].(map[interface{}]interface{})
 	if !ok {
+		fmt.Println("配置中找不到environment部分")
 		return nil, fmt.Errorf("配置中找不到environment部分")
 	}
 
@@ -106,16 +124,32 @@ func GetEnvironmentFromConfig(config map[string]interface{}, envName string) (*E
 			env := envData.(map[interface{}]interface{})
 			key := env["key"].(map[interface{}]interface{})
 
+			// 解析nginx配置
+			var nginxConfigs []NginxMap
+			if nginxData, exists := env["nginx"].(map[interface{}]interface{}); exists {
+				for Name, nginxConfig := range nginxData {
+					nginx := nginxConfig.(map[interface{}]interface{})
+					nginxConfigs = append(nginxConfigs, NginxMap{
+						Name:     Name.(string),
+						BaseUrl:  nginx["base_url"].(string),
+						ConfPath: nginx["nginx_conf"].(string),
+					})
+				}
+			}
+
 			return &Environment{
-				ID:       name.(string),
-				Name:     env["name"].(string),
-				BaseURL:  env["base_url"].(string),
-				Project:  env["project"].(string),
-				username: key["name"].(string),
-				password: key["token"].(string),
+				ID:        name.(string),
+				Name:      env["name"].(string),
+				BaseURL:   env["base_url"].(string),
+				Project:   env["project"].(string),
+				Ip:        env["ip"].(string),
+				username:  key["name"].(string),
+				password:  key["token"].(string),
+				nginxList: nginxConfigs,
 			}, nil
 		}
 	}
 
+	fmt.Printf("找不到环境: %s\n", envName)
 	return nil, fmt.Errorf("找不到环境: %s", envName)
 }

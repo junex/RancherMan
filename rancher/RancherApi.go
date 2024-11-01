@@ -25,10 +25,21 @@ type Endpoint struct {
 	Port int
 }
 
+type NamespaceResp struct {
+	Name        string
+	ProjectId   string
+	Description string
+}
+
+func makeProjectRequest(environment Environment, method, url string, payload []byte) (*http.Response, error) {
+	project := environment.Project
+	fullURL := fmt.Sprintf("project/%s/%s", project, url)
+	return makeRequest(environment, method, fullURL, payload)
+}
+
 func makeRequest(environment Environment, method, url string, payload []byte) (*http.Response, error) {
 	baseURL := environment.BaseURL
-	project := environment.Project
-	fullURL := fmt.Sprintf("%s/project/%s/%s", baseURL, project, url)
+	fullURL := fmt.Sprintf("%s/%s", baseURL, url)
 	client := &http.Client{Transport: &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: true}}}
 	var body io.Reader
 	if payload != nil {
@@ -50,12 +61,10 @@ func Scale(environment Environment, namespace string, workload string, replicas 
 		service = workload[colonIndex+1:]
 	}
 
-	fmt.Printf("%s\tscale:%d\t", service, replicas)
-
 	payload := map[string]int{"scale": replicas}
 	jsonPayload, _ := json.Marshal(payload)
 
-	resp, err := makeRequest(environment, "PUT", fmt.Sprintf("workloads/deployment:%s:%s", namespace, service), jsonPayload)
+	resp, err := makeProjectRequest(environment, "PUT", fmt.Sprintf("workloads/deployment:%s:%s", namespace, service), jsonPayload)
 
 	if err != nil {
 		return false
@@ -71,9 +80,7 @@ func Redeploy(environment Environment, namespace string, workload string) bool {
 		service = workload[colonIndex+1:]
 	}
 
-	fmt.Printf("%s\tredeploy\t", service)
-
-	resp, err := makeRequest(environment, "POST", fmt.Sprintf("workloads/deployment:%s:%s?action=redeploy", namespace, service), nil)
+	resp, err := makeProjectRequest(environment, "POST", fmt.Sprintf("workloads/deployment:%s:%s?action=redeploy", namespace, service), nil)
 	if err != nil {
 		fmt.Println("失败")
 		return false
@@ -84,7 +91,7 @@ func Redeploy(environment Environment, namespace string, workload string) bool {
 }
 
 func GetConfigMaps(environment Environment, confPath string) (string, error) {
-	resp, err := makeRequest(environment, "GET", fmt.Sprintf("configMaps/%s", confPath), nil)
+	resp, err := makeProjectRequest(environment, "GET", fmt.Sprintf("configMaps/%s", confPath), nil)
 	if err != nil {
 		log.Printf("Error fetching nginx config: %v", err)
 		return "", err
@@ -103,9 +110,9 @@ func GetConfigMaps(environment Environment, confPath string) (string, error) {
 	return configMap.Data.DefaultConf, nil
 }
 
-func GetWorkloadsList(environment Environment) ([]WorkloadResp, error) {
+func GetWorkloadList(environment Environment) ([]WorkloadResp, error) {
 
-	resp, err := makeRequest(environment, "GET", "workloads?limit=-1", nil)
+	resp, err := makeProjectRequest(environment, "GET", "workloads?limit=-1", nil)
 	if err != nil {
 		log.Printf("Error fetching workloads: %v", err)
 		return nil, err
@@ -120,4 +127,23 @@ func GetWorkloadsList(environment Environment) ([]WorkloadResp, error) {
 	}
 	resp.Body.Close()
 	return workloadsResponse.Data, nil
+}
+
+func GetNamespaceList(environment Environment) ([]NamespaceResp, error) {
+
+	resp, err := makeRequest(environment, "GET", "cluster/local/namespaces?limit=-1", nil)
+	if err != nil {
+		log.Printf("Error fetching namespace: %v", err)
+		return nil, err
+	}
+
+	var NamespaceResponse struct {
+		Data []NamespaceResp `json:"data"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&NamespaceResponse); err != nil {
+		log.Printf("Error decoding namespace: %v", err)
+		return nil, err
+	}
+	resp.Body.Close()
+	return NamespaceResponse.Data, nil
 }
