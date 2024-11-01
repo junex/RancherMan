@@ -83,10 +83,10 @@ fyne-cross darwin -arch=amd64
 fyne-cross linux -arch=amd64
 ```
 
-# 查看所有打包选项
+### 查看所有打包选项
 fyne package --help
 
-# 常用选项：
+### 常用选项：
 -name: 指定应用名称
 -icon: 指定应用图标
 -appID: 指定应用ID（如：com.company.app）
