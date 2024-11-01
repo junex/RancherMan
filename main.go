@@ -273,6 +273,11 @@ func initView() fyne.Window {
 			}
 		}
 		gInfoArea.SetText(info.String())
+		if (gSelectedWorkload != rancher.Workload{}) {
+			selectWorkloadSingle(gSelectedWorkload)
+		} else if (gSelectedWorkload == rancher.Workload{}) && len(gSelectedWorkloads) == 0 && (gSelectedNamespace != rancher.Namespace{}) {
+			selectNameSpace(gSelectedNamespace)
+		}
 	})
 
 	button3 := widget.NewButton("打开", func() {
