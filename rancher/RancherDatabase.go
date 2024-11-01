@@ -200,3 +200,10 @@ func (dm *DatabaseManager) GetAllEnvironments() ([]string, error) {
 	result := dm.db.Model(&Workload{}).Distinct().Pluck("environment", &environments)
 	return environments, result.Error
 }
+
+// GetWorkloadsByNamespace 根据命名空间获取工作负载列表
+func (dm *DatabaseManager) GetWorkloadsByNamespace(namespace string) ([]Workload, error) {
+	var workloads []Workload
+	result := dm.db.Where("namespace = ?", namespace).Find(&workloads)
+	return workloads, result.Error
+}
