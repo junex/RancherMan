@@ -47,6 +47,20 @@ func (Namespace) TableName() string {
 	return "namespace"
 }
 
+// Pod 模型
+type Pod struct {
+	ID          uint   `gorm:"primaryKey"`
+	Environment string `gorm:"size:20"`
+	ProjectId   string `gorm:"size:20"`
+	NamespaceId string `gorm:"size:20"`
+	WorkloadId  string `gorm:"size:80"`
+	State       string `gorm:"size:10"`
+}
+
+func (Pod) TableName() string {
+	return "pod"
+}
+
 // DatabaseManager 数据库管理器结构体
 type DatabaseManager struct {
 	db     *gorm.DB
@@ -92,7 +106,7 @@ func (dm *DatabaseManager) Close() error {
 
 // initDatabase 初始化数据库，创建必要的表
 func (dm *DatabaseManager) initDatabase() error {
-	return dm.db.AutoMigrate(&Workload{}, &Config{}, &Namespace{})
+	return dm.db.AutoMigrate(&Workload{}, &Config{}, &Namespace{}, &Pod{})
 }
 
 // GetWorkloadDetailsByEnvNamespace 根据环境和命名空间获取工作负载详细信息
@@ -230,4 +244,47 @@ func (dm *DatabaseManager) GetAllNamespacesDetail() ([]Namespace, error) {
 	var namespaces []Namespace
 	result := dm.db.Find(&namespaces)
 	return namespaces, result.Error
+}
+
+// DeletePodByEnvironment 根据环境名称删除pod数据
+func (dm *DatabaseManager) DeletePodByEnvironment(environment string) (int64, error) {
+	result := dm.db.Where("environment = ?", environment).Delete(&Pod{})
+	return result.RowsAffected, result.Error
+}
+
+// InsertPods 批量插入pod数据
+func (dm *DatabaseManager) InsertPods(pods []Pod) error {
+	return dm.db.Transaction(func(tx *gorm.DB) error {
+		for _, pod := range pods {
+			if err := tx.Create(&pod).Error; err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+}
+
+// GetPodCountByEnvironment 根据环境名称获取pod数量
+func (dm *DatabaseManager) GetPodCountByEnvironment(environment string) (int64, error) {
+	var count int64
+	result := dm.db.Model(&Pod{}).Where("environment = ?", environment).Count(&count)
+	return count, result.Error
+}
+
+// GetPodCountByEnvNamespace 根据环境名称和命名空间获取pod数量
+func (dm *DatabaseManager) GetPodCountByEnvNamespace(environment string, namespaceId string) (int64, error) {
+	var count int64
+	result := dm.db.Model(&Pod{}).
+		Where("environment = ? AND namespace_id = ?", environment, namespaceId).
+		Count(&count)
+	return count, result.Error
+}
+
+// GetPodsByEnvNamespaceWorkload 根据环境名称、命名空间和workload查询pod列表
+func (dm *DatabaseManager) GetPodsByEnvNamespaceWorkload(environment string, namespaceId string, workload string) ([]Pod, error) {
+	var pods []Pod
+	result := dm.db.Where("environment = ? AND namespace_id = ? AND workload_id LIKE ?",
+		environment, namespaceId, "%"+workload+"%").
+		Find(&pods)
+	return pods, result.Error
 }

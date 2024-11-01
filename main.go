@@ -229,20 +229,52 @@ func initView() fyne.Window {
 	})
 	button2 := widget.NewButton("更新数据", func() {
 		var info strings.Builder
-		for envName, _ := range gConfig["environment"].(map[interface{}]interface{}) {
-			environment, _ := rancher.GetEnvironmentFromConfig(gConfig, envName.(string))
-			info.WriteString(fmt.Sprintf("更新数据: %s ", environment.Name))
+		if gEnvironment != nil {
+			// 只更新当前选中的环境
+			info.WriteString(fmt.Sprintf("更新数据: %s ", gEnvironment.Name))
 			gInfoArea.SetText(info.String())
-			rancher.UpdateEnvironment(gDb, envName.(string), environment, true)
-			info.WriteString(fmt.Sprintf("完成!\n"))
-			gInfoArea.SetText(info.String())
+			rancher.UpdateEnvironment(gDb, gEnvironment.ID, gEnvironment, true)
+			info.WriteString("完成!\n")
+		} else {
+			// 如果没有选中环境，则更新所有环境
+			for envName, _ := range gConfig["environment"].(map[interface{}]interface{}) {
+				environment, _ := rancher.GetEnvironmentFromConfig(gConfig, envName.(string))
+				info.WriteString(fmt.Sprintf("更新数据: %s ", environment.Name))
+				gInfoArea.SetText(info.String())
+				rancher.UpdateEnvironment(gDb, environment.ID, environment, true)
+				info.WriteString("完成!\n")
+				gInfoArea.SetText(info.String())
+			}
 		}
-		info.WriteString(fmt.Sprintf("加载数据 "))
+		info.WriteString("加载数据 ")
 		gInfoArea.SetText(info.String())
 		refreshNamespace()
-		info.WriteString(fmt.Sprintf("完成!\n"))
+		info.WriteString("完成!\n")
 		gInfoArea.SetText(info.String())
 	})
+
+	// 添加更新pod按钮
+	buttonUpdatePod := widget.NewButton("更新Pod", func() {
+		var info strings.Builder
+		if gEnvironment != nil {
+			// 只更新当前选中的环境
+			info.WriteString(fmt.Sprintf("更新Pod: %s ", gEnvironment.Name))
+			gInfoArea.SetText(info.String())
+			rancher.UpdatePod(gDb, gEnvironment.ID, gEnvironment)
+			info.WriteString("完成!\n")
+		} else {
+			// 如果没有选中环境，则更新所有环境
+			for envName, _ := range gConfig["environment"].(map[interface{}]interface{}) {
+				environment, _ := rancher.GetEnvironmentFromConfig(gConfig, envName.(string))
+				info.WriteString(fmt.Sprintf("更新Pod: %s ", environment.Name))
+				gInfoArea.SetText(info.String())
+				rancher.UpdateEnvironment(gDb, environment.ID, environment, false)
+				info.WriteString("完成!\n")
+			}
+		}
+		gInfoArea.SetText(info.String())
+	})
+
 	button3 := widget.NewButton("打开", func() {
 		var info strings.Builder
 		if (gSelectedWorkload != rancher.Workload{}) {
@@ -365,7 +397,7 @@ func initView() fyne.Window {
 			workloadScroll,
 		),
 		container.NewVBox(
-			container.NewHBox(button1, button2, button3, button4, button5),
+			container.NewHBox(button1, button2, buttonUpdatePod, button3, button4, button5),
 			infoContainer, // 使用包装后的容器
 		),
 	)
@@ -400,6 +432,7 @@ func selectNameSpace(namespace rancher.Namespace) {
 		workloadNames[i] = w.Name
 	}
 	gWorkloadData.Set(workloadNames)
+	podCount, _ := gDb.GetPodCountByEnvNamespace(gSelectedNamespace.Environment, gSelectedNamespace.Name)
 
 	unselectWorkloadSingle()
 	var info strings.Builder
@@ -407,11 +440,14 @@ func selectNameSpace(namespace rancher.Namespace) {
 	info.WriteString(fmt.Sprintf("命名空间: %s\n", gSelectedNamespace.Name))
 	info.WriteString(fmt.Sprintf("项目: %s\n", gSelectedNamespace.Project))
 	info.WriteString(fmt.Sprintf("描述: %s\n", gSelectedNamespace.Description))
+	info.WriteString(fmt.Sprintf("pod数量: %d\n", podCount))
 	gInfoArea.SetText(info.String())
 }
 
 func selectWorkloadSingle(workload rancher.Workload) {
 	gSelectedWorkload = workload
+
+	podList, _ := gDb.GetPodsByEnvNamespaceWorkload(gSelectedWorkload.Environment, gSelectedWorkload.Namespace, gSelectedWorkload.Name)
 
 	// 构建信息字符串
 	var info strings.Builder
@@ -420,6 +456,14 @@ func selectWorkloadSingle(workload rancher.Workload) {
 	info.WriteString(fmt.Sprintf("命名空间: %s\n", workload.Namespace))
 	info.WriteString(fmt.Sprintf("名称: %s\n", workload.Name))
 	info.WriteString(fmt.Sprintf("镜像: %s\n", workload.Image))
+	info.WriteString(fmt.Sprintf("pod数量: %d\n", len(podList)))
+	if len(podList) > 0 {
+		var states []string
+		for _, pod := range podList {
+			states = append(states, pod.State)
+		}
+		info.WriteString(fmt.Sprintf("Pod状态: %s\n", strings.Join(states, ",")))
+	}
 
 	// 只有当 NodePort 不为空时才显示，并按逗号分隔成多行
 	if workload.NodePort != "" {

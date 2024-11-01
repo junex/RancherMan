@@ -31,6 +31,13 @@ type NamespaceResp struct {
 	Description string
 }
 
+type PodResp struct {
+	ProjectId   string
+	NamespaceId string
+	WorkloadId  string
+	State       string
+}
+
 func makeProjectRequest(environment Environment, method, url string, payload []byte) (*http.Response, error) {
 	project := environment.Project
 	fullURL := fmt.Sprintf("project/%s/%s", project, url)
@@ -146,4 +153,23 @@ func GetNamespaceList(environment Environment) ([]NamespaceResp, error) {
 	}
 	resp.Body.Close()
 	return NamespaceResponse.Data, nil
+}
+
+func GetPodList(environment Environment) ([]PodResp, error) {
+
+	resp, err := makeProjectRequest(environment, "GET", "pods?limit=-1", nil)
+	if err != nil {
+		log.Printf("Error fetching pods: %v", err)
+		return nil, err
+	}
+
+	var podsResponse struct {
+		Data []PodResp `json:"data"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&podsResponse); err != nil {
+		log.Printf("Error decoding pods: %v", err)
+		return nil, err
+	}
+	resp.Body.Close()
+	return podsResponse.Data, nil
 }

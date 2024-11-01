@@ -110,6 +110,35 @@ func UpdateEnvironment(db *DatabaseManager, envName string, environment *Environ
 	}
 }
 
+func UpdatePod(db *DatabaseManager, envName string, environment *Environment) {
+	// 删除旧的pod数据
+	db.DeletePodByEnvironment(envName)
+
+	// 获取所有pod
+	podList, err := GetPodList(*environment)
+	if err != nil {
+		fmt.Printf("获取Pod列表失败: %v\n", err)
+		return
+	}
+
+	var podsDBList []Pod
+	for _, pod := range podList {
+		podsDBList = append(podsDBList, Pod{
+			Environment: envName,
+			ProjectId:   pod.ProjectId,
+			NamespaceId: pod.NamespaceId,
+			WorkloadId:  pod.WorkloadId,
+			State:       pod.State,
+		})
+	}
+
+	// 插入新的pod数据
+	if err := db.InsertPods(podsDBList); err != nil {
+		fmt.Printf("插入Pod数据失败: %v\n", err)
+		return
+	}
+}
+
 func GetEnvironmentFromConfig(config map[string]interface{}, envName string) (*Environment, error) {
 	// 从配置中获取environments部分
 	environments, ok := config["environment"].(map[interface{}]interface{})
