@@ -70,7 +70,7 @@ func initView() fyne.Window {
 
 	// 创建主菜单
 	mainMenu := fyne.NewMainMenu(
-		fyne.NewMenu("文件",
+		fyne.NewMenu("配置",
 			fyne.NewMenuItem("加载配置", func() {
 				var content = gInfoArea.Text
 				rancher.SaveConfigToDb(gDb, content)
@@ -80,6 +80,8 @@ func initView() fyne.Window {
 				configContent, _ := gDb.GetConfigContent(1)
 				gInfoArea.SetText(configContent)
 			}),
+		),
+		fyne.NewMenu("数据",
 			fyne.NewMenuItem("更新数据", func() {
 				var info strings.Builder
 				if gEnvironment != nil {
@@ -107,8 +109,8 @@ func initView() fyne.Window {
 					gInfoArea.SetText(fmt.Sprintf("清空数据失败: %v", err))
 				} else {
 					gInfoArea.SetText("数据已清空")
-					// 刷新界面
 				}
+
 				initData()
 			}),
 		),
