@@ -7,14 +7,11 @@ import (
 	"os"
 	"strings"
 
-	"io"
-
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/app"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/data/binding"
 	"fyne.io/fyne/v2/dialog"
-	"fyne.io/fyne/v2/storage"
 	"fyne.io/fyne/v2/widget"
 	"github.com/flopp/go-findfont"
 )
@@ -45,15 +42,15 @@ var gWorkloadData binding.StringList
 func main() {
 	//// 创建数据库管理器实例
 	database, err := rancher.NewDatabaseManager("")
-	gDb = database
-	gConfig = rancher.LoadConfigFromDb(gDb)
 	if err != nil {
 		log.Fatal(err)
 	}
+	gDb = database
 	defer gDb.Close()
 	initFont()
 	window := initView()
-	go refreshNamespace()
+	loadConfig(false)
+	initData()
 	window.ShowAndRun()
 }
 func initFont() {
@@ -70,6 +67,63 @@ func initView() fyne.Window {
 	//// 初始化界面
 	myApp := app.New()
 	myWindow := myApp.NewWindow("Rancher助手")
+
+	// 创建主菜单
+	mainMenu := fyne.NewMainMenu(
+		fyne.NewMenu("文件",
+			fyne.NewMenuItem("加载配置", func() {
+				var content = gInfoArea.Text
+				rancher.SaveConfigToDb(gDb, content)
+				loadConfig(true)
+			}),
+			fyne.NewMenuItem("显示配置", func() {
+				configContent, _ := gDb.GetConfigContent(1)
+				gInfoArea.SetText(configContent)
+			}),
+			fyne.NewMenuItem("更新数据", func() {
+				var info strings.Builder
+				if gEnvironment != nil {
+					// 只更新当前选中的环境
+					info.WriteString(fmt.Sprintf("更新数据: %s ", gEnvironment.Name))
+					gInfoArea.SetText(info.String())
+					rancher.UpdateEnvironment(gDb, gEnvironment.ID, gEnvironment, true)
+					info.WriteString("完成!\n")
+				} else {
+					// 如果没有选中环境，则更新所有环境
+					for envName, _ := range gConfig["environment"].(map[interface{}]interface{}) {
+						environment, _ := rancher.GetEnvironmentFromConfig(gConfig, envName.(string))
+						info.WriteString(fmt.Sprintf("更新数据: %s ", environment.Name))
+						gInfoArea.SetText(info.String())
+						rancher.UpdateEnvironment(gDb, environment.ID, environment, true)
+						info.WriteString("完成!\n")
+						gInfoArea.SetText(info.String())
+					}
+				}
+				initData()
+			}),
+			fyne.NewMenuItem("清空数据", func() {
+				err := gDb.ClearAllData()
+				if err != nil {
+					gInfoArea.SetText(fmt.Sprintf("清空数据失败: %v", err))
+				} else {
+					gInfoArea.SetText("数据已清空")
+					// 刷新界面
+				}
+				initData()
+			}),
+		),
+		fyne.NewMenu("帮助",
+			fyne.NewMenuItem("关于", func() {
+				dialog.ShowInformation("关于",
+					"Rancher助手 v1.0\n\n"+
+						"一个用于管理Rancher工作负载的工具\n"+
+						"作者: 六月盒饭\n"+
+						"版权所有 2024",
+					myWindow)
+			}),
+		),
+	)
+	myWindow.SetMainMenu(mainMenu)
 
 	// 创建命名空间搜索框
 	namespaceSearch := widget.NewEntry()
@@ -101,7 +155,7 @@ func initView() fyne.Window {
 	namespaceScroll := container.NewScroll(gNamespaceList)
 	namespaceScroll.SetMinSize(fyne.NewSize(200, 300))
 
-	// 创建服务搜索框
+	// 创建服务workload索框
 	gWorkloadSearch = widget.NewEntry()
 	gWorkloadSearch.SetPlaceHolder("搜索服务...")
 
@@ -182,7 +236,7 @@ func initView() fyne.Window {
 	}
 
 	workloadScroll := container.NewScroll(gWorkloadList)
-	workloadScroll.SetMinSize(fyne.NewSize(200, 300))
+	workloadScroll.SetMinSize(fyne.NewSize(200, 350))
 
 	// 创建右侧信息区域
 	gInfoArea = widget.NewMultiLineEntry()
@@ -190,68 +244,7 @@ func initView() fyne.Window {
 	gInfoArea.SetMinRowsVisible(15)
 	// 将 InfoArea 放入固定大小的容器中
 	infoContainer := container.NewScroll(gInfoArea)
-	infoContainer.SetMinSize(fyne.NewSize(500, 330))
-
-	// 创建按钮
-	button1 := widget.NewButton("加载配置", func() {
-		dialog := dialog.NewFileOpen(func(reader fyne.URIReadCloser, err error) {
-			if err != nil {
-				dialog.ShowError(err, myWindow)
-				return
-			}
-			if reader == nil {
-				return
-			}
-			defer reader.Close()
-
-			// 检查文件扩展名
-			if !strings.HasSuffix(strings.ToLower(reader.URI().String()), ".yaml") &&
-				!strings.HasSuffix(strings.ToLower(reader.URI().String()), ".yml") {
-				dialog.ShowError(fmt.Errorf("请选择YAML文件"), myWindow)
-				return
-			}
-
-			// 读取文件内容
-			content, err := io.ReadAll(reader)
-			if err != nil {
-				dialog.ShowError(err, myWindow)
-				return
-			}
-
-			rancher.SaveConfigToDb(gDb, string(content))
-			gConfig = rancher.LoadConfigFromDb(gDb)
-
-			gInfoArea.SetText("配置已成功加载并保存")
-		}, myWindow)
-
-		dialog.SetFilter(storage.NewExtensionFileFilter([]string{".yaml", ".yml"}))
-		dialog.Show()
-	})
-	button2 := widget.NewButton("更新数据", func() {
-		var info strings.Builder
-		if gEnvironment != nil {
-			// 只更新当前选中的环境
-			info.WriteString(fmt.Sprintf("更新数据: %s ", gEnvironment.Name))
-			gInfoArea.SetText(info.String())
-			rancher.UpdateEnvironment(gDb, gEnvironment.ID, gEnvironment, true)
-			info.WriteString("完成!\n")
-		} else {
-			// 如果没有选中环境，则更新所有环境
-			for envName, _ := range gConfig["environment"].(map[interface{}]interface{}) {
-				environment, _ := rancher.GetEnvironmentFromConfig(gConfig, envName.(string))
-				info.WriteString(fmt.Sprintf("更新数据: %s ", environment.Name))
-				gInfoArea.SetText(info.String())
-				rancher.UpdateEnvironment(gDb, environment.ID, environment, true)
-				info.WriteString("完成!\n")
-				gInfoArea.SetText(info.String())
-			}
-		}
-		info.WriteString("加载数据 ")
-		gInfoArea.SetText(info.String())
-		refreshNamespace()
-		info.WriteString("完成!\n")
-		gInfoArea.SetText(info.String())
-	})
+	infoContainer.SetMinSize(fyne.NewSize(500, 380))
 
 	// 添加更新pod按钮
 	buttonUpdatePod := widget.NewButton("更新Pod", func() {
@@ -280,7 +273,7 @@ func initView() fyne.Window {
 		}
 	})
 
-	button3 := widget.NewButton("打开", func() {
+	buttonOpen := widget.NewButton("打开", func() {
 		var info strings.Builder
 		if (gSelectedWorkload != rancher.Workload{}) {
 			// 处理单选的情况
@@ -316,7 +309,7 @@ func initView() fyne.Window {
 		}
 		gInfoArea.SetText(info.String())
 	})
-	button4 := widget.NewButton("关闭", func() {
+	buttonClose := widget.NewButton("关闭", func() {
 		var info strings.Builder
 		if (gSelectedWorkload != rancher.Workload{}) {
 			// 处理单选的情况
@@ -352,7 +345,7 @@ func initView() fyne.Window {
 		}
 		gInfoArea.SetText(info.String())
 	})
-	button5 := widget.NewButton("重新部署", func() {
+	buttonRedeploy := widget.NewButton("重新部署", func() {
 		var info strings.Builder
 		if (gSelectedWorkload != rancher.Workload{}) {
 			// 处理单选的情况
@@ -389,7 +382,7 @@ func initView() fyne.Window {
 		gInfoArea.SetText(info.String())
 	})
 
-	// 创建布局
+	// 更新布局（移除了buttonUpdateData）
 	content := container.NewHBox(
 		container.NewVBox(
 			widget.NewLabel("命名空间"),
@@ -402,19 +395,36 @@ func initView() fyne.Window {
 			workloadScroll,
 		),
 		container.NewVBox(
-			container.NewHBox(button1, button2, buttonUpdatePod, button3, button4, button5),
-			infoContainer, // 使用包装后的容器
+			container.NewHBox(buttonUpdatePod, buttonOpen, buttonClose, buttonRedeploy),
+			infoContainer,
 		),
 	)
 	myWindow.SetContent(content)
 	return myWindow
 }
-
-func refreshNamespace() {
+func loadConfig(showSuccessTip bool) {
+	var err error
+	gConfig, err = rancher.LoadConfigFromDb(gDb)
+	if err != nil {
+		gInfoArea.SetText(fmt.Sprintf("从数据库读取配置时出错: %v", err))
+	} else {
+		if showSuccessTip {
+			gInfoArea.SetText("配置已成功加载")
+		}
+	}
+}
+func initData() {
 	namespaces, _ := gDb.GetAllNamespacesDetail()
 	gNamespaces = append(namespaces)
-	gFilteredNamespaces = filterNamespaces(gNamespaces, "")
+	gFilteredNamespaces = []rancher.Namespace{}
 	gNamespaceList.Refresh()
+	gWorkloadSearch.SetText("")
+
+	gWorkloads = []rancher.Workload{}
+	gFilteredWorkloads = []rancher.Workload{}
+	gWorkloadData.Set([]string{})
+	gWorkloadList.Refresh()
+	gWorkloadSearch.SetText("")
 }
 
 func selectNameSpace(namespace rancher.Namespace) {

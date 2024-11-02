@@ -25,18 +25,20 @@ type NginxMap struct {
 	ConfPath string
 }
 
-func LoadConfigFromDb(db *DatabaseManager) map[string]interface{} {
-	configContent, _ := db.GetConfigContent(1)
+func LoadConfigFromDb(db *DatabaseManager) (map[string]interface{}, error) {
+	configContent, err := db.GetConfigContent(1)
+	if err != nil {
+		return make(map[string]interface{}), err
+	}
 	if configContent == "" {
-
-		return make(map[string]interface{})
+		return make(map[string]interface{}), nil
 	}
 	var config map[string]interface{}
-	err := yaml.Unmarshal([]byte(configContent), &config)
-	if err != nil {
-		panic(err)
+	if err := yaml.Unmarshal([]byte(configContent), &config); err != nil {
+		fmt.Printf("从数据库解析配置时出错: %v\n", err)
+		return make(map[string]interface{}), err
 	}
-	return config
+	return config, nil
 }
 
 func SaveConfigToDb(db *DatabaseManager, content string) {

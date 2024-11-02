@@ -288,3 +288,25 @@ func (dm *DatabaseManager) GetPodsByEnvNamespaceWorkload(environment string, nam
 		Find(&pods)
 	return pods, result.Error
 }
+
+// ClearAllData 清除namespace,pod,workload的数据
+func (dm *DatabaseManager) ClearAllData() error {
+	return dm.db.Transaction(func(tx *gorm.DB) error {
+		// 清除namespace数据
+		if err := tx.Exec("DELETE FROM namespace").Error; err != nil {
+			return err
+		}
+
+		// 清除pod数据
+		if err := tx.Exec("DELETE FROM pod").Error; err != nil {
+			return err
+		}
+
+		// 清除workload数据
+		if err := tx.Exec("DELETE FROM workload").Error; err != nil {
+			return err
+		}
+
+		return nil
+	})
+}
