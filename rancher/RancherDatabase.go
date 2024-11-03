@@ -70,9 +70,24 @@ type DatabaseManager struct {
 // NewDatabaseManager 创建新的数据库管理器实例
 func NewDatabaseManager(dbFile string) (*DatabaseManager, error) {
 	if dbFile == "" {
-		// 使用系统临时目录
-		tmpDir := os.TempDir()
-		dbFile = filepath.Join(tmpDir, "rancher.db")
+		// 获取 APPDATA 目录
+		appData := os.Getenv("APPDATA")
+		if appData == "" {
+			// 如果 APPDATA 不存在（非 Windows 系统），使用用户主目录
+			homeDir, err := os.UserHomeDir()
+			if err != nil {
+				return nil, fmt.Errorf("无法获取用户主目录: %v", err)
+			}
+			appData = filepath.Join(homeDir, ".config")
+		}
+
+		// 创建应用数据目录（如果不存在）
+		appDir := filepath.Join(appData, "Rancher助手")
+		if err := os.MkdirAll(appDir, 0755); err != nil {
+			return nil, fmt.Errorf("创建应用数据目录失败: %v", err)
+		}
+
+		dbFile = filepath.Join(appDir, "app.db")
 	}
 
 	fmt.Printf("使用数据库文件: %s\n", dbFile)
