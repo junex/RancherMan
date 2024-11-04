@@ -5,6 +5,8 @@ import (
 	"strconv"
 	"strings"
 
+	"encoding/json"
+
 	"gopkg.in/yaml.v2"
 )
 
@@ -87,9 +89,12 @@ func UpdateEnvironment(db *DatabaseManager, envName string, environment *Environ
 
 		var workloadsDBList []Workload
 		for _, workload := range workloadList {
-			var image, nodePort string
+			var image, containerEnvironment, nodePort string
 			if len(workload.Containers) == 1 {
 				image = workload.Containers[0].Image
+				if envData, err := json.Marshal(workload.Containers[0].Environment); err == nil {
+					containerEnvironment = string(envData)
+				}
 			}
 			if len(workload.PublicEndpoints) > 0 {
 				ports := make([]string, len(workload.PublicEndpoints))
@@ -100,12 +105,13 @@ func UpdateEnvironment(db *DatabaseManager, envName string, environment *Environ
 			}
 			accessPath := LookupService(lookupDict, workload.Name, workload.NamespaceID)
 			workloadsDBList = append(workloadsDBList, Workload{
-				Environment: envName,
-				Namespace:   workload.NamespaceID,
-				Name:        workload.Name,
-				Image:       image,
-				NodePort:    nodePort,
-				AccessPath:  accessPath,
+				Environment:          envName,
+				Namespace:            workload.NamespaceID,
+				Name:                 workload.Name,
+				Image:                image,
+				ContainerEnvironment: containerEnvironment,
+				NodePort:             nodePort,
+				AccessPath:           accessPath,
 			})
 		}
 		db.InsertWorkloads(workloadsDBList)

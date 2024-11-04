@@ -2,9 +2,12 @@ package main
 
 import (
 	"RancherMan/rancher"
+	"encoding/json"
 	"fmt"
 	"log"
 	"os"
+	"sort"
+	"strconv"
 	"strings"
 
 	"fyne.io/fyne/v2"
@@ -35,6 +38,7 @@ var gWorkloadSearch *widget.Entry
 var gDb *rancher.DatabaseManager
 var gConfig map[string]interface{}
 var gEnvironment *rancher.Environment
+var gJumpHostConfig *rancher.JumpHostConfig
 
 // 绑定数据
 var gWorkloadData binding.StringList
@@ -71,10 +75,11 @@ func initView() fyne.Window {
 	// 创建主菜单
 	mainMenu := fyne.NewMainMenu(
 		fyne.NewMenu("配置",
-			fyne.NewMenuItem("加载配置", func() {
+			fyne.NewMenuItem("保存配置", func() {
 				var content = gInfoArea.Text
 				rancher.SaveConfigToDb(gDb, content)
 				loadConfig(true)
+				initData()
 			}),
 			fyne.NewMenuItem("显示配置", func() {
 				configContent, _ := gDb.GetConfigContent(1)
@@ -82,6 +87,26 @@ func initView() fyne.Window {
 			}),
 		),
 		fyne.NewMenu("数据",
+			fyne.NewMenuItem("更新跳板机", func() {
+				if gJumpHostConfig == nil {
+					gInfoArea.SetText("错误：未配置跳板机信息")
+					return
+				}
+
+				// 创建进度监听器
+				listener := &jumpHostProgressListener{
+					infoArea: gInfoArea,
+				}
+
+				// 清空信息区域并显示初始信息
+				gInfoArea.SetText("开始扫描跳板机配置...\n")
+
+				// 在新的 goroutine 中执行耗时操作
+				go func() {
+					gDb.DeleteAllUploadConfigs()
+					rancher.ListUploadConfig(gJumpHostConfig, 50, listener)
+				}()
+			}),
 			fyne.NewMenuItem("更新数据", func() {
 				var info strings.Builder
 				if gEnvironment != nil {
@@ -155,7 +180,7 @@ func initView() fyne.Window {
 	}
 
 	namespaceScroll := container.NewScroll(gNamespaceList)
-	namespaceScroll.SetMinSize(fyne.NewSize(200, 300))
+	namespaceScroll.SetMinSize(fyne.NewSize(200, 350))
 
 	// 创建服务workload索框
 	gWorkloadSearch = widget.NewEntry()
@@ -244,9 +269,9 @@ func initView() fyne.Window {
 	gInfoArea = widget.NewMultiLineEntry()
 	gInfoArea.SetText("")
 	gInfoArea.SetMinRowsVisible(15)
-	// 将 InfoArea 放入固定大小的容器中
+	// 将 InfoArea 放固定大小的容器中
 	infoContainer := container.NewScroll(gInfoArea)
-	infoContainer.SetMinSize(fyne.NewSize(500, 380))
+	infoContainer.SetMinSize(fyne.NewSize(550, 380))
 
 	// 添加更新pod按钮
 	buttonUpdatePod := widget.NewButton("更新Pod", func() {
@@ -314,7 +339,7 @@ func initView() fyne.Window {
 	buttonClose := widget.NewButton("关闭", func() {
 		var info strings.Builder
 		if (gSelectedWorkload != rancher.Workload{}) {
-			// 处理单选的情况
+			// 处理单的情况
 			info.WriteString(fmt.Sprintf("关闭: %s\t", gSelectedWorkload.Name))
 			success := rancher.Scale(*gEnvironment, gSelectedWorkload.Namespace, gSelectedWorkload.Name, 0)
 			if success {
@@ -407,6 +432,16 @@ func initView() fyne.Window {
 func loadConfig(showSuccessTip bool) {
 	var err error
 	gConfig, err = rancher.LoadConfigFromDb(gDb)
+	// 解析跳板机配置
+	if jumpHost, exists := gConfig["jump_host"].(map[interface{}]interface{}); exists {
+		gJumpHostConfig = &rancher.JumpHostConfig{
+			Ip:       jumpHost["ip"].(string),
+			Port:     strconv.Itoa(jumpHost["port"].(int)),
+			Username: jumpHost["username"].(string),
+			Password: jumpHost["password"].(string),
+			RootPath: jumpHost["root_path"].(string),
+		}
+	}
 	if err != nil {
 		gInfoArea.SetText(fmt.Sprintf("从数据库读取配置时出错: %v", err))
 	} else {
@@ -418,7 +453,7 @@ func loadConfig(showSuccessTip bool) {
 func initData() {
 	namespaces, _ := gDb.GetAllNamespacesDetail()
 	gNamespaces = append(namespaces)
-	gFilteredNamespaces = []rancher.Namespace{}
+	gFilteredNamespaces = append(gNamespaces)
 	gNamespaceList.Refresh()
 	gWorkloadSearch.SetText("")
 
@@ -449,7 +484,7 @@ func selectNameSpace(namespace rancher.Namespace) {
 		workloadNames[i] = w.Name
 	}
 	gWorkloadData.Set(workloadNames)
-	podCount, _ := gDb.GetPodCountByEnvNamespace(gSelectedNamespace.Environment, gSelectedNamespace.Name)
+	podList, _ := gDb.GetPodsByEnvNamespace(gSelectedNamespace.Environment, gSelectedNamespace.Name)
 
 	unselectWorkloadSingle()
 	var info strings.Builder
@@ -457,7 +492,20 @@ func selectNameSpace(namespace rancher.Namespace) {
 	info.WriteString(fmt.Sprintf("命名空间: %s\n", gSelectedNamespace.Name))
 	info.WriteString(fmt.Sprintf("项目: %s\n", gSelectedNamespace.Project))
 	info.WriteString(fmt.Sprintf("描述: %s\n", gSelectedNamespace.Description))
-	info.WriteString(fmt.Sprintf("pod数量: %d\n", podCount))
+	info.WriteString(fmt.Sprintf("pod数量: %d\n", len(podList)))
+	// 创建一个map来存储相同workloadId的pod状态
+	podStates := make(map[string][]string)
+	for _, pod := range podList {
+		// 获取workloadId的最后一部分
+		parts := strings.Split(pod.WorkloadId, ":")
+		workloadName := parts[len(parts)-1]
+		podStates[workloadName] = append(podStates[workloadName], pod.State)
+	}
+
+	// 打印每个workload的pod状态
+	for workloadName, states := range podStates {
+		info.WriteString(fmt.Sprintf("%s: %s\n", workloadName, strings.Join(states, ",")))
+	}
 	gInfoArea.SetText(info.String())
 }
 
@@ -481,7 +529,15 @@ func selectWorkloadSingle(workload rancher.Workload) {
 		}
 		info.WriteString(fmt.Sprintf("Pod状态: %s\n", strings.Join(states, ",")))
 	}
-
+	// 如果工作负载名称包含mysql，尝试获取MySQL root密码
+	if strings.Contains(strings.ToLower(workload.Name), "mysql") && workload.ContainerEnvironment != "" {
+		var envVars map[string]string
+		if err := json.Unmarshal([]byte(workload.ContainerEnvironment), &envVars); err == nil {
+			if rootPassword, exists := envVars["MYSQL_ROOT_PASSWORD"]; exists {
+				info.WriteString(fmt.Sprintf("MySQL Root密码: %s\n", rootPassword))
+			}
+		}
+	}
 	// 只有当 NodePort 不为空时才显示，并按逗号分隔成多行
 	if workload.NodePort != "" {
 		info.WriteString("端口访问:\n")
@@ -500,6 +556,87 @@ func selectWorkloadSingle(workload rancher.Workload) {
 			info.WriteString(fmt.Sprintf("  %s\n", strings.TrimSpace(path)))
 		}
 	}
+	var uploadConfigList []rancher.UploadConfig
+	// 获取完整镜像名称的配置
+	configs, _ := gDb.GetUploadConfigsByImage(workload.Image)
+	uploadConfigList = append(uploadConfigList, configs...)
+
+	// 获取不带标签的镜像名称的配置
+	image := workload.Image
+	tag := ""
+	if colonIndex := strings.LastIndex(workload.Image, ":"); colonIndex > 0 {
+		image = workload.Image[:colonIndex]
+		tag = workload.Image[colonIndex+1:]
+	}
+	fmt.Printf("tag = %s\n", tag)
+	configs1, _ := gDb.GetUploadConfigsByImageLikeSpecial1(image)
+	uploadConfigList = append(uploadConfigList, configs1...)
+	// 获取最后两个/之间的部分
+	imageDir := ""
+	if strings.Count(image, "/") >= 2 {
+		lastSlashIndex := strings.LastIndex(image, "/")
+		lastTwoSlashIndex := strings.LastIndex(image[:lastSlashIndex], "/")
+		if lastTwoSlashIndex > 0 {
+			imageDir = image[lastTwoSlashIndex+1 : lastSlashIndex]
+		}
+	}
+	fmt.Printf("image = %s\n", image)
+	if lastSlashIndex := strings.LastIndex(image, "/"); lastSlashIndex >= 0 {
+		image = image[lastSlashIndex+1:]
+	}
+	configs2, _ := gDb.GetUploadConfigsByImageLikeSpecial2(image)
+	uploadConfigList = append(uploadConfigList, configs2...)
+	// 对uploadConfigList进行排序
+	sort.Slice(uploadConfigList, func(i, j int) bool {
+		// 获取$符号数量
+		dollarCountI := strings.Count(uploadConfigList[i].Image, "$")
+		dollarCountJ := strings.Count(uploadConfigList[j].Image, "$")
+
+		// 如果$数量不同,按数量升序排序
+		if dollarCountI != dollarCountJ {
+			return dollarCountI < dollarCountJ
+		}
+
+		// 如果$数量相同,检查namespace中的部分是否包含在Dir中
+		parts := strings.Split(workload.Namespace, "-")
+		if len(parts) >= 3 {
+			// 取两个-号之间的部分
+			middlePart := parts[1]
+			containsI := strings.Contains(uploadConfigList[i].Dir, middlePart)
+			containsJ := strings.Contains(uploadConfigList[j].Dir, middlePart)
+
+			// 包含middlePart的排在前面
+			if containsI != containsJ {
+				return containsI
+			}
+		}
+
+		// 其他情况保持原有顺序
+		return i < j
+	})
+	// 如果有上传配置，则显示
+	if len(uploadConfigList) > 0 {
+		info.WriteString("\n上传配置:\n")
+		for _, config := range uploadConfigList {
+			info.WriteString(fmt.Sprintf("  目录: %s\n", config.Dir))
+			if config.Script != "" {
+				var script = config.Script
+				if strings.Count(config.Image, "$") == 1 {
+					script = script + " " + tag
+				} else if strings.Count(config.Image, "$") == 2 {
+					script = script + " " + tag + " " + imageDir
+				}
+				info.WriteString(fmt.Sprintf("  脚本: %s\n", script))
+			}
+			if config.Jar != "" {
+				info.WriteString(fmt.Sprintf("  Jar包: %s\n", config.Jar))
+			}
+			if config.Image != "" {
+				info.WriteString(fmt.Sprintf("  镜像: %s\n", config.Image))
+			}
+			info.WriteString("\n")
+		}
+	}
 	gInfoArea.SetText(info.String())
 }
 
@@ -508,7 +645,7 @@ func unselectWorkloadSingle() {
 	gSelectedWorkload = rancher.Workload{}
 }
 
-// 添加过滤函数
+// 添加过过滤函数
 func filterNamespaces(items []rancher.Namespace, filter string) []rancher.Namespace {
 	if filter == "" {
 		return items
@@ -542,9 +679,40 @@ func updateInfoAreaForMultiSelect() {
 
 	for _, workload := range gSelectedWorkloads {
 		info.WriteString(fmt.Sprintf("\n服务名称: %s\n", workload.Name))
-		info.WriteString(fmt.Sprintf("命名空间: %s\n", workload.Namespace))
 		info.WriteString(fmt.Sprintf("镜像: %s\n", workload.Image))
 	}
 
 	gInfoArea.SetText(info.String())
+}
+
+// 在 main.go 中添加以下结构体和方法
+type jumpHostProgressListener struct {
+	infoArea *widget.Entry
+}
+
+func (l *jumpHostProgressListener) OnProgress(currentFolder string, current, total int) {
+	// 直接更新 UI
+	l.infoArea.SetText(fmt.Sprintf("正在扫描... %d/%d\n当前目录:%s", current, total, currentFolder))
+}
+
+func (l *jumpHostProgressListener) OnComplete() {
+	// 直接更新 UI
+	l.infoArea.SetText("更新跳板机完成")
+}
+
+func (l *jumpHostProgressListener) OnBatchResult(configs []rancher.SSHUploadConfig) {
+	// 将 SSHUploadConfig 转换为 UploadConfig
+	var uploadConfigs []rancher.UploadConfig
+	for _, config := range configs {
+		uploadConfig := rancher.UploadConfig{
+			Dir:    config.Dir,
+			Script: config.Script,
+			Jar:    config.Jar,
+			Image:  config.Image,
+		}
+		uploadConfigs = append(uploadConfigs, uploadConfig)
+	}
+
+	// 插入数据库
+	gDb.InsertUploadConfigs(uploadConfigs)
 }

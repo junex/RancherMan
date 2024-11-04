@@ -11,13 +11,14 @@ import (
 
 // Workload 工作负载模型
 type Workload struct {
-	ID          uint   `gorm:"primaryKey"`
-	Environment string `gorm:"size:20;not null"`
-	Namespace   string `gorm:"size:50;not null"`
-	Name        string `gorm:"size:30;not null"`
-	Image       string `gorm:"size:100"`
-	NodePort    string `gorm:"size:100"`
-	AccessPath  string `gorm:"size:500"`
+	ID                   uint   `gorm:"primaryKey"`
+	Environment          string `gorm:"size:20;not null"`
+	Namespace            string `gorm:"size:50;not null"`
+	Name                 string `gorm:"size:30;not null"`
+	Image                string `gorm:"size:100"`
+	ContainerEnvironment string `gorm:"size:255"`
+	NodePort             string `gorm:"size:100"`
+	AccessPath           string `gorm:"size:500"`
 }
 
 func (Workload) TableName() string {
@@ -59,6 +60,19 @@ type Pod struct {
 
 func (Pod) TableName() string {
 	return "pod"
+}
+
+// UploadConfig 上传配置模型
+type UploadConfig struct {
+	ID     uint   `gorm:"primaryKey"`
+	Dir    string `gorm:"size:100"`
+	Script string `gorm:"size:30"`
+	Jar    string `gorm:"size:50"`
+	Image  string `gorm:"size:50"`
+}
+
+func (UploadConfig) TableName() string {
+	return "upload_config"
 }
 
 // DatabaseManager 数据库管理器结构体
@@ -121,7 +135,7 @@ func (dm *DatabaseManager) Close() error {
 
 // initDatabase 初始化数据库，创建必要的表
 func (dm *DatabaseManager) initDatabase() error {
-	return dm.db.AutoMigrate(&Workload{}, &Config{}, &Namespace{}, &Pod{})
+	return dm.db.AutoMigrate(&Workload{}, &Config{}, &Namespace{}, &Pod{}, &UploadConfig{})
 }
 
 // GetWorkloadDetailsByEnvNamespace 根据环境和命名空间获取工作负载详细信息
@@ -286,13 +300,12 @@ func (dm *DatabaseManager) GetPodCountByEnvironment(environment string) (int64, 
 	return count, result.Error
 }
 
-// GetPodCountByEnvNamespace 根据环境名称和命名空间获取pod数量
-func (dm *DatabaseManager) GetPodCountByEnvNamespace(environment string, namespaceId string) (int64, error) {
-	var count int64
-	result := dm.db.Model(&Pod{}).
-		Where("environment = ? AND namespace_id = ?", environment, namespaceId).
-		Count(&count)
-	return count, result.Error
+// GetPodsByEnvNamespace 根据环境名称和命名空间查询pod列表
+func (dm *DatabaseManager) GetPodsByEnvNamespace(environment string, namespaceId string) ([]Pod, error) {
+	var pods []Pod
+	result := dm.db.Where("environment = ? AND namespace_id = ?", environment, namespaceId).
+		Find(&pods)
+	return pods, result.Error
 }
 
 // GetPodsByEnvNamespaceWorkload 根据环境名称、命名空间和workload查询pod列表
@@ -322,6 +335,49 @@ func (dm *DatabaseManager) ClearAllData() error {
 			return err
 		}
 
+		// 清除upload_config数据
+		if err := tx.Exec("DELETE FROM upload_config").Error; err != nil {
+			return err
+		}
+
 		return nil
 	})
+}
+
+// DeleteAllUploadConfigs 删除所有上传配置数据
+func (dm *DatabaseManager) DeleteAllUploadConfigs() error {
+	return dm.db.Exec("DELETE FROM upload_config").Error
+}
+
+// InsertUploadConfigs 批量插入上传配置数据
+func (dm *DatabaseManager) InsertUploadConfigs(configs []UploadConfig) error {
+	return dm.db.Transaction(func(tx *gorm.DB) error {
+		for _, config := range configs {
+			if err := tx.Create(&config).Error; err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+}
+
+// GetUploadConfigsByImage 根据镜像名称精确查询上传配置
+func (dm *DatabaseManager) GetUploadConfigsByImage(image string) ([]UploadConfig, error) {
+	var configs []UploadConfig
+	result := dm.db.Where("image = ?", image).Find(&configs)
+	return configs, result.Error
+}
+
+// GetUploadConfigsByImageLikeSpecial1 根据镜像名称模糊查询上传配置
+func (dm *DatabaseManager) GetUploadConfigsByImageLikeSpecial1(image string) ([]UploadConfig, error) {
+	var configs []UploadConfig
+	result := dm.db.Where("image LIKE ?", image+":$%").Find(&configs)
+	return configs, result.Error
+}
+
+// GetUploadConfigsByImageLikeSpecial2 根据镜像名称模糊查询上传配置
+func (dm *DatabaseManager) GetUploadConfigsByImageLikeSpecial2(image string) ([]UploadConfig, error) {
+	var configs []UploadConfig
+	result := dm.db.Where("image LIKE ?", "%/$%/"+image+":$%").Find(&configs)
+	return configs, result.Error
 }
