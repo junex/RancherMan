@@ -1,6 +1,7 @@
 package main
 
 import (
+	"RancherMan/component"
 	"RancherMan/rancher"
 	"encoding/json"
 	"fmt"
@@ -13,7 +14,6 @@ import (
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/app"
 	"fyne.io/fyne/v2/container"
-	"fyne.io/fyne/v2/data/binding"
 	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/widget"
 	"github.com/flopp/go-findfont"
@@ -26,11 +26,10 @@ var gSelectedNamespace rancher.Namespace
 var gWorkloads []rancher.Workload
 var gFilteredWorkloads []rancher.Workload
 var gSelectedWorkloads []rancher.Workload
-var gSelectedWorkload rancher.Workload
 
 // UI组件
 var gNamespaceList *widget.List
-var gWorkloadList *widget.List
+var gWorkloadList *component.MultiSelectList
 var gInfoArea *widget.Entry
 var gWorkloadSearch *widget.Entry
 
@@ -39,9 +38,6 @@ var gDb *rancher.DatabaseManager
 var gConfig map[string]interface{}
 var gEnvironment *rancher.Environment
 var gJumpHostConfig *rancher.JumpHostConfig
-
-// 绑定数据
-var gWorkloadData binding.StringList
 
 func main() {
 	//// 创建数据库管理器实例
@@ -170,13 +166,20 @@ func initView() fyne.Window {
 		},
 	)
 	gNamespaceList.OnSelected = func(id widget.ListItemID) {
-		selectNameSpace(gFilteredNamespaces[id])
+		selectNamespace(gFilteredNamespaces[id])
+		updateInfoArea()
+	}
+	gNamespaceList.OnUnselected = func(id widget.ListItemID) {
+		unselectNamespace()
+		updateInfoArea()
 	}
 
 	// 添加命名空间搜索功能
 	namespaceSearch.OnChanged = func(s string) {
 		gFilteredNamespaces = filterNamespaces(gNamespaces, s)
 		gNamespaceList.Refresh()
+		gNamespaceList.UnselectAll()
+		updateInfoArea()
 	}
 
 	namespaceScroll := container.NewScroll(gNamespaceList)
@@ -190,50 +193,30 @@ func initView() fyne.Window {
 	gFilteredWorkloads = gWorkloads
 
 	// 建中间的服务列表
-	gWorkloadData = binding.NewStringList()
-	gWorkloadList = widget.NewListWithData(
-		gWorkloadData,
+	gWorkloadList = component.NewList(
+		func() int { return len(gFilteredWorkloads) },
 		func() fyne.CanvasObject {
 			return container.NewHBox(
 				widget.NewCheck("", func(bool) {}),
 				widget.NewLabel("Template Service"),
 			)
 		},
-		func(item binding.DataItem, obj fyne.CanvasObject) {
-			text, _ := item.(binding.String).Get()
-			index := -1
-			for i, w := range gFilteredWorkloads {
-				if w.Name == text {
-					index = i
-					break
-				}
-			}
-			if index == -1 {
-				return
-			}
-
-			check := obj.(*fyne.Container).Objects[0].(*widget.Check)
-			label := obj.(*fyne.Container).Objects[1].(*widget.Label)
-			label.SetText(gFilteredWorkloads[index].Name)
-
+		func(id widget.ListItemID, item fyne.CanvasObject) {
+			workload := gFilteredWorkloads[id]
+			check := item.(*fyne.Container).Objects[0].(*widget.Check)
+			label := item.(*fyne.Container).Objects[1].(*widget.Label)
+			label.SetText(workload.Name)
 			check.OnChanged = func(checked bool) {
 				if checked {
-					gSelectedWorkloads = append(gSelectedWorkloads, gFilteredWorkloads[index])
-					unselectWorkloadSingle()
+					gWorkloadList.MultiSelectedOne(id)
 				} else {
-					for i, w := range gSelectedWorkloads {
-						if w.Name == gFilteredWorkloads[index].Name {
-							gSelectedWorkloads = append(gSelectedWorkloads[:i], gSelectedWorkloads[i+1:]...)
-							break
-						}
-					}
+					gWorkloadList.UnMultiSelectedOne(id)
 				}
-				updateInfoAreaForMultiSelect()
 			}
 
 			isSelected := false
 			for _, w := range gSelectedWorkloads {
-				if w.Name == gFilteredWorkloads[index].Name {
+				if w.Name == workload.Name {
 					isSelected = true
 					break
 				}
@@ -241,25 +224,26 @@ func initView() fyne.Window {
 			check.SetChecked(isSelected)
 		},
 	)
+	gWorkloadList.OnMultiSelected(func(ids []int) {
+		// 清空之前选择的workloads
+		gSelectedWorkloads = []rancher.Workload{}
+
+		// 根据选中的ID添加workload到选中列表
+		for _, id := range ids {
+			if id < len(gFilteredWorkloads) {
+				gSelectedWorkloads = append(gSelectedWorkloads, gFilteredWorkloads[id])
+			}
+		}
+		// 更新信息区域显示
+		updateInfoArea()
+	})
 
 	// 添加服务搜索功能
 	gWorkloadSearch.OnChanged = func(s string) {
 		gFilteredWorkloads = filterWorkloads(gWorkloads, s)
-
-		// 更新绑定数据
-		workloadNames := make([]string, len(gFilteredWorkloads))
-		for i, w := range gFilteredWorkloads {
-			workloadNames[i] = w.Name
-		}
-		gWorkloadData.Set(workloadNames)
-	}
-
-	gWorkloadList.OnSelected = func(id widget.ListItemID) {
-		if len(gSelectedWorkloads) > 0 {
-			unselectWorkloadSingle()
-			return
-		}
-		selectWorkloadSingle(gFilteredWorkloads[id])
+		gWorkloadList.Refresh()
+		gWorkloadList.UnselectMulti()
+		updateInfoArea()
 	}
 
 	workloadScroll := container.NewScroll(gWorkloadList)
@@ -293,25 +277,12 @@ func initView() fyne.Window {
 			}
 		}
 		gInfoArea.SetText(info.String())
-		if (gSelectedWorkload != rancher.Workload{}) {
-			selectWorkloadSingle(gSelectedWorkload)
-		} else if (gSelectedWorkload == rancher.Workload{}) && len(gSelectedWorkloads) == 0 && (gSelectedNamespace != rancher.Namespace{}) {
-			selectNameSpace(gSelectedNamespace)
-		}
+		updateInfoArea()
 	})
 
 	buttonOpen := widget.NewButton("打开", func() {
 		var info strings.Builder
-		if (gSelectedWorkload != rancher.Workload{}) {
-			// 处理单选的情况
-			info.WriteString(fmt.Sprintf("打开: %s\t", gSelectedWorkload.Name))
-			success := rancher.Scale(*gEnvironment, gSelectedWorkload.Namespace, gSelectedWorkload.Name, 1)
-			if success {
-				info.WriteString("成功!\n")
-			} else {
-				info.WriteString("失败!\n")
-			}
-		} else if len(gSelectedWorkloads) > 0 {
+		if len(gSelectedWorkloads) > 0 {
 			// 处理多选的情况
 			for _, workload := range gSelectedWorkloads {
 				info.WriteString(fmt.Sprintf("打开: %s\t", workload.Name))
@@ -338,16 +309,7 @@ func initView() fyne.Window {
 	})
 	buttonClose := widget.NewButton("关闭", func() {
 		var info strings.Builder
-		if (gSelectedWorkload != rancher.Workload{}) {
-			// 处理单的情况
-			info.WriteString(fmt.Sprintf("关闭: %s\t", gSelectedWorkload.Name))
-			success := rancher.Scale(*gEnvironment, gSelectedWorkload.Namespace, gSelectedWorkload.Name, 0)
-			if success {
-				info.WriteString("成功!\n")
-			} else {
-				info.WriteString("失败!\n")
-			}
-		} else if len(gSelectedWorkloads) > 0 {
+		if len(gSelectedWorkloads) > 0 {
 			// 处理多选的情况
 			for _, workload := range gSelectedWorkloads {
 				info.WriteString(fmt.Sprintf("关闭: %s\t", workload.Name))
@@ -374,16 +336,7 @@ func initView() fyne.Window {
 	})
 	buttonRedeploy := widget.NewButton("重新部署", func() {
 		var info strings.Builder
-		if (gSelectedWorkload != rancher.Workload{}) {
-			// 处理单选的情况
-			info.WriteString(fmt.Sprintf("重新部署: %s\t", gSelectedWorkload.Name))
-			success := rancher.Redeploy(*gEnvironment, gSelectedWorkload.Namespace, gSelectedWorkload.Name)
-			if success {
-				info.WriteString("成功!\n")
-			} else {
-				info.WriteString("失败!\n")
-			}
-		} else if len(gSelectedWorkloads) > 0 {
+		if len(gSelectedWorkloads) > 0 {
 			// 处理多选的情况
 			for _, workload := range gSelectedWorkloads {
 				info.WriteString(fmt.Sprintf("重新部署: %s\t", workload.Name))
@@ -454,17 +407,28 @@ func initData() {
 	namespaces, _ := gDb.GetAllNamespacesDetail()
 	gNamespaces = append(namespaces)
 	gFilteredNamespaces = append(gNamespaces)
+	gSelectedNamespace = rancher.Namespace{}
 	gNamespaceList.Refresh()
 	gWorkloadSearch.SetText("")
 
 	gWorkloads = []rancher.Workload{}
 	gFilteredWorkloads = []rancher.Workload{}
-	gWorkloadData.Set([]string{})
 	gWorkloadList.Refresh()
 	gWorkloadSearch.SetText("")
 }
 
-func selectNameSpace(namespace rancher.Namespace) {
+func unselectNamespace() {
+	gFilteredNamespaces = append(gNamespaces)
+	gSelectedNamespace = rancher.Namespace{}
+	gNamespaceList.Refresh()
+
+	gWorkloads = []rancher.Workload{}
+	gFilteredWorkloads = []rancher.Workload{}
+	gWorkloadList.Refresh()
+	gWorkloadSearch.SetText("")
+}
+
+func selectNamespace(namespace rancher.Namespace) {
 	// 清空工作负载搜索框
 	gWorkloadSearch.SetText("")
 
@@ -473,20 +437,25 @@ func selectNameSpace(namespace rancher.Namespace) {
 	workloads, _ := gDb.GetWorkloadsByNamespace(namespace.Name)
 	gWorkloads = append(workloads)
 	gFilteredWorkloads = filterWorkloads(gWorkloads, "")
-
-	// 清除已选择的workloads（多选和单选）
 	gSelectedWorkloads = []rancher.Workload{}
-	gSelectedWorkload = rancher.Workload{} // 清除单选
+	gWorkloadList.Refresh()
+}
 
-	// 更新绑定数据
-	workloadNames := make([]string, len(gFilteredWorkloads))
-	for i, w := range gFilteredWorkloads {
-		workloadNames[i] = w.Name
+func updateInfoArea() {
+	if len(gSelectedWorkloads) == 0 && gSelectedNamespace.Name == "" {
+		gInfoArea.SetText("")
+	} else if len(gSelectedWorkloads) == 0 {
+		updateInfoAreaForSelectNamespace()
+	} else if len(gSelectedWorkloads) == 1 {
+		updateInfoAreaForSingleWorkload()
+	} else {
+		updateInfoAreaForSelectMultiWorkload()
 	}
-	gWorkloadData.Set(workloadNames)
+}
+
+func updateInfoAreaForSelectNamespace() {
 	podList, _ := gDb.GetPodsByEnvNamespace(gSelectedNamespace.Environment, gSelectedNamespace.Name)
 
-	unselectWorkloadSingle()
 	var info strings.Builder
 	info.WriteString(fmt.Sprintf("环境: %s\n", gEnvironment.Name))
 	info.WriteString(fmt.Sprintf("命名空间: %s\n", gSelectedNamespace.Name))
@@ -509,10 +478,9 @@ func selectNameSpace(namespace rancher.Namespace) {
 	gInfoArea.SetText(info.String())
 }
 
-func selectWorkloadSingle(workload rancher.Workload) {
-	gSelectedWorkload = workload
-
-	podList, _ := gDb.GetPodsByEnvNamespaceWorkload(gSelectedWorkload.Environment, gSelectedWorkload.Namespace, gSelectedWorkload.Name)
+func updateInfoAreaForSingleWorkload() {
+	workload := gSelectedWorkloads[0]
+	podList, _ := gDb.GetPodsByEnvNamespaceWorkload(workload.Environment, workload.Namespace, workload.Name)
 
 	// 构建信息字符串
 	var info strings.Builder
@@ -568,7 +536,6 @@ func selectWorkloadSingle(workload rancher.Workload) {
 		image = workload.Image[:colonIndex]
 		tag = workload.Image[colonIndex+1:]
 	}
-	fmt.Printf("tag = %s\n", tag)
 	configs1, _ := gDb.GetUploadConfigsByImageLikeSpecial1(image)
 	uploadConfigList = append(uploadConfigList, configs1...)
 	// 获取最后两个/之间的部分
@@ -580,7 +547,6 @@ func selectWorkloadSingle(workload rancher.Workload) {
 			imageDir = image[lastTwoSlashIndex+1 : lastSlashIndex]
 		}
 	}
-	fmt.Printf("image = %s\n", image)
 	if lastSlashIndex := strings.LastIndex(image, "/"); lastSlashIndex >= 0 {
 		image = image[lastSlashIndex+1:]
 	}
@@ -640,9 +606,17 @@ func selectWorkloadSingle(workload rancher.Workload) {
 	gInfoArea.SetText(info.String())
 }
 
-func unselectWorkloadSingle() {
-	gWorkloadList.UnselectAll()
-	gSelectedWorkload = rancher.Workload{}
+// 添加新的函数来更新信息区域显示多选内容
+func updateInfoAreaForSelectMultiWorkload() {
+	var info strings.Builder
+	info.WriteString(fmt.Sprintf("已选择 %d 个服务:\n", len(gSelectedWorkloads)))
+
+	for _, workload := range gSelectedWorkloads {
+		info.WriteString(fmt.Sprintf("\n服务名称: %s\n", workload.Name))
+		info.WriteString(fmt.Sprintf("镜像: %s\n", workload.Image))
+	}
+
+	gInfoArea.SetText(info.String())
 }
 
 // 添加过过滤函数
@@ -670,19 +644,6 @@ func filterWorkloads(items []rancher.Workload, filter string) []rancher.Workload
 		}
 	}
 	return filtered
-}
-
-// 添加新的函数来更新信息区域显示多选内容
-func updateInfoAreaForMultiSelect() {
-	var info strings.Builder
-	info.WriteString(fmt.Sprintf("已选择 %d 个服务:\n", len(gSelectedWorkloads)))
-
-	for _, workload := range gSelectedWorkloads {
-		info.WriteString(fmt.Sprintf("\n服务名称: %s\n", workload.Name))
-		info.WriteString(fmt.Sprintf("镜像: %s\n", workload.Image))
-	}
-
-	gInfoArea.SetText(info.String())
 }
 
 // 在 main.go 中添加以下结构体和方法
