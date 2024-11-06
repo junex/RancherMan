@@ -168,7 +168,7 @@ func initView() fyne.Window {
 
 							// 将JSON转换为Deployment结构体
 							var deploymentStruct types.Deployment
-							if err := json.Unmarshal([]byte(deployment), &deploymentStruct); err != nil {
+							if err := yaml.Unmarshal([]byte(deployment), &deploymentStruct); err != nil {
 								info.WriteString(fmt.Sprintf("解析deployment失败: %v\n", err))
 								continue
 							}

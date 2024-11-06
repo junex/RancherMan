@@ -42,10 +42,10 @@ type PodResp struct {
 func makeProjectRequest(environment Environment, method, url string, payload []byte) (*http.Response, error) {
 	project := environment.Project
 	fullURL := fmt.Sprintf("project/%s/%s", project, url)
-	return makeRequest(environment, method, fullURL, payload)
+	return makeRequest(environment, method, fullURL, payload, "")
 }
 
-func makeRequest(environment Environment, method, url string, payload []byte) (*http.Response, error) {
+func makeRequest(environment Environment, method, url string, payload []byte, accept string) (*http.Response, error) {
 	baseURL := environment.BaseURL
 	fullURL := fmt.Sprintf("%s/%s", baseURL, url)
 	client := &http.Client{Transport: &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: true}}}
@@ -56,6 +56,9 @@ func makeRequest(environment Environment, method, url string, payload []byte) (*
 	req, err := http.NewRequest(method, fullURL, body)
 	if err != nil {
 		return nil, err
+	}
+	if accept != "" {
+		req.Header.Set("Accept", accept)
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.SetBasicAuth(environment.username, environment.password)
@@ -139,7 +142,7 @@ func GetWorkloadList(environment Environment) ([]WorkloadResp, error) {
 
 func GetNamespaceList(environment Environment) ([]NamespaceResp, error) {
 
-	resp, err := makeRequest(environment, "GET", "cluster/local/namespaces?limit=-1", nil)
+	resp, err := makeRequest(environment, "GET", "cluster/local/namespaces?limit=-1", nil, "")
 	if err != nil {
 		log.Printf("Error fetching namespace: %v", err)
 		return nil, err
@@ -176,7 +179,9 @@ func GetPodList(environment Environment) ([]PodResp, error) {
 }
 
 func GetDeploymentYaml(environment Environment, namespace string, workload string) (string, error) {
-	response, err := makeProjectRequest(environment, "GET", fmt.Sprintf("workloads/deployment:%s:%s/yaml?export=true", namespace, workload), nil)
+	project := environment.Project
+	url := fmt.Sprintf("project/%s/workloads/deployment:%s:%s/yaml?export=true", project, namespace, workload)
+	response, err := makeRequest(environment, "GET", url, nil, "application/yaml")
 	if err != nil {
 		log.Printf("Error fetching workloads: %v", err)
 		return "", err
