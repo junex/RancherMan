@@ -84,6 +84,21 @@ type Container struct {
 	Ports           []Port   `yaml:"ports,omitempty" json:"ports,omitempty"`
 	Env             []EnvVar `yaml:"env,omitempty" json:"env,omitempty"`
 	ImagePullPolicy string   `yaml:"imagePullPolicy,omitempty" json:"imagePullPolicy,omitempty"`
+	//VolumeMounts    []VolumeMount    `yaml:"volumeMounts,omitempty" json:"volumeMounts,omitempty"`
+	SecurityContext *SecurityContext `yaml:"securityContext,omitempty" json:"securityContext,omitempty"`
+}
+
+type VolumeMount struct {
+	Name      string `yaml:"name" json:"name"`
+	MountPath string `yaml:"mountPath" json:"mountPath"`
+	SubPath   string `yaml:"subPath,omitempty" json:"subPath,omitempty"`
+}
+
+type SecurityContext struct {
+	AllowPrivilegeEscalation *bool `yaml:"allowPrivilegeEscalation,omitempty" json:"allowPrivilegeEscalation,omitempty"`
+	Privileged               *bool `yaml:"privileged,omitempty" json:"privileged,omitempty"`
+	ReadOnlyRootFilesystem   *bool `yaml:"readOnlyRootFilesystem,omitempty" json:"readOnlyRootFilesystem,omitempty"`
+	RunAsNonRoot             *bool `yaml:"runAsNonRoot,omitempty" json:"runAsNonRoot,omitempty"`
 }
 
 // Port 表示容器端口
