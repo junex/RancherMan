@@ -17,7 +17,6 @@ func NewList(length func() int, createItem func() fyne.CanvasObject, updateItem 
 	list.ExtendBaseWidget(list)
 	ml := &MultiSelectList{List: list, onSelectMulti: func(ids []int) {}, selectedIds: make(map[int]struct{})}
 	list.OnSelected = func(id int) {
-		list.Unselect(id)
 		// 检查id是否已存在于selectedIds中
 		if _, exists := ml.selectedIds[id]; exists {
 			// 如果存在则删除
@@ -28,6 +27,8 @@ func NewList(length func() int, createItem func() fyne.CanvasObject, updateItem 
 		}
 		// 调用多选回调函数
 		ml.MultiSelected()
+		list.Unselect(id)
+		list.RefreshItem(id)
 	}
 	return ml
 }
@@ -59,4 +60,13 @@ func (t *MultiSelectList) MultiSelectedOne(id widget.ListItemID) {
 func (t *MultiSelectList) UnMultiSelectedOne(id widget.ListItemID) {
 	delete(t.selectedIds, id)
 	t.MultiSelected()
+}
+
+func (t *MultiSelectList) RefreshList() {
+	t.ScrollToTop()
+	for i := range t.Length() {
+		if i < 10 {
+			t.RefreshItem(i)
+		}
+	}
 }

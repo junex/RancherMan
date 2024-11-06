@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
-	"os"
 	"sort"
 	"strconv"
 	"strings"
@@ -16,7 +15,6 @@ import (
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/widget"
-	"github.com/flopp/go-findfont"
 )
 
 // 数据
@@ -29,9 +27,11 @@ var gSelectedWorkloads []rancher.Workload
 
 // UI组件
 var gNamespaceList *widget.List
+var gNamespaceSearch *widget.Entry
 var gWorkloadList *component.MultiSelectList
-var gInfoArea *widget.Entry
 var gWorkloadSearch *widget.Entry
+var gInfoArea *widget.Entry
+var gApp fyne.App
 
 // 数据库和配置
 var gDb *rancher.DatabaseManager
@@ -47,26 +47,15 @@ func main() {
 	}
 	gDb = database
 	defer gDb.Close()
-	initFont()
 	window := initView()
 	loadConfig(false)
 	initData()
 	window.ShowAndRun()
 }
-func initFont() {
-	// 设置中文字体
-	fontPaths := findfont.List()
-	for _, path := range fontPaths {
-		if strings.Contains(path, "msyh.ttf") || strings.Contains(path, "simhei.ttf") || strings.Contains(path, "simsun.ttc") || strings.Contains(path, "simkai.ttf") {
-			os.Setenv("FYNE_FONT", path)
-			break
-		}
-	}
-}
 func initView() fyne.Window {
 	//// 初始化界面
-	myApp := app.New()
-	myWindow := myApp.NewWindow("Rancher助手")
+	gApp = app.New()
+	myWindow := gApp.NewWindow("Rancher助手")
 
 	// 创建主菜单
 	mainMenu := fyne.NewMainMenu(
@@ -111,6 +100,7 @@ func initView() fyne.Window {
 					gInfoArea.SetText(info.String())
 					rancher.UpdateEnvironment(gDb, gEnvironment.ID, gEnvironment, true)
 					info.WriteString("完成!\n")
+					gInfoArea.SetText(info.String())
 				} else {
 					// 如果没有选中环境，则更新所有环境
 					for envName, _ := range gConfig["environment"].(map[interface{}]interface{}) {
@@ -149,8 +139,8 @@ func initView() fyne.Window {
 	myWindow.SetMainMenu(mainMenu)
 
 	// 创建命名空间搜索框
-	namespaceSearch := widget.NewEntry()
-	namespaceSearch.SetPlaceHolder("搜索命名空间...")
+	gNamespaceSearch = widget.NewEntry()
+	gNamespaceSearch.SetPlaceHolder("搜索命名空间...")
 
 	// 创建过滤后的命名空间列表
 	gFilteredNamespaces = gNamespaces
@@ -169,16 +159,13 @@ func initView() fyne.Window {
 		selectNamespace(gFilteredNamespaces[id])
 		updateInfoArea()
 	}
-	gNamespaceList.OnUnselected = func(id widget.ListItemID) {
-		unselectNamespace()
-		updateInfoArea()
-	}
 
 	// 添加命名空间搜索功能
-	namespaceSearch.OnChanged = func(s string) {
+	gNamespaceSearch.OnChanged = func(s string) {
 		gFilteredNamespaces = filterNamespaces(gNamespaces, s)
-		gNamespaceList.Refresh()
 		gNamespaceList.UnselectAll()
+		gNamespaceList.ScrollToTop()
+		gNamespaceList.Refresh()
 		updateInfoArea()
 	}
 
@@ -241,8 +228,8 @@ func initView() fyne.Window {
 	// 添加服务搜索功能
 	gWorkloadSearch.OnChanged = func(s string) {
 		gFilteredWorkloads = filterWorkloads(gWorkloads, s)
-		gWorkloadList.Refresh()
 		gWorkloadList.UnselectMulti()
+		gWorkloadList.RefreshList()
 		updateInfoArea()
 	}
 
@@ -366,7 +353,7 @@ func initView() fyne.Window {
 	content := container.NewHBox(
 		container.NewVBox(
 			widget.NewLabel("命名空间"),
-			namespaceSearch,
+			gNamespaceSearch,
 			namespaceScroll,
 		),
 		container.NewVBox(
@@ -408,37 +395,28 @@ func initData() {
 	gNamespaces = append(namespaces)
 	gFilteredNamespaces = append(gNamespaces)
 	gSelectedNamespace = rancher.Namespace{}
+	gNamespaceList.UnselectAll()
+	gNamespaceList.ScrollToTop()
 	gNamespaceList.Refresh()
-	gWorkloadSearch.SetText("")
+	gNamespaceSearch.SetText("")
 
 	gWorkloads = []rancher.Workload{}
 	gFilteredWorkloads = []rancher.Workload{}
-	gWorkloadList.Refresh()
-	gWorkloadSearch.SetText("")
-}
-
-func unselectNamespace() {
-	gFilteredNamespaces = append(gNamespaces)
-	gSelectedNamespace = rancher.Namespace{}
-	gNamespaceList.Refresh()
-
-	gWorkloads = []rancher.Workload{}
-	gFilteredWorkloads = []rancher.Workload{}
-	gWorkloadList.Refresh()
+	gWorkloadList.RefreshList()
 	gWorkloadSearch.SetText("")
 }
 
 func selectNamespace(namespace rancher.Namespace) {
-	// 清空工作负载搜索框
-	gWorkloadSearch.SetText("")
-
 	gSelectedNamespace = namespace
 	gEnvironment, _ = rancher.GetEnvironmentFromConfig(gConfig, gSelectedNamespace.Environment)
+
 	workloads, _ := gDb.GetWorkloadsByNamespace(namespace.Name)
-	gWorkloads = append(workloads)
-	gFilteredWorkloads = filterWorkloads(gWorkloads, "")
+	gWorkloads = workloads
+	gWorkloadSearch.SetText("")
+	gFilteredWorkloads = gWorkloads
 	gSelectedWorkloads = []rancher.Workload{}
-	gWorkloadList.Refresh()
+	gWorkloadList.UnselectMulti()
+	gWorkloadList.RefreshList()
 }
 
 func updateInfoArea() {
