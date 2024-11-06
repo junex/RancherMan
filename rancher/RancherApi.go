@@ -174,3 +174,20 @@ func GetPodList(environment Environment) ([]PodResp, error) {
 	resp.Body.Close()
 	return podsResponse.Data, nil
 }
+
+func GetDeploymentYaml(environment Environment, namespace string, workload string) (string, error) {
+	response, err := makeProjectRequest(environment, "GET", fmt.Sprintf("workloads/deployment:%s:%s/yaml?export=true", namespace, workload), nil)
+	if err != nil {
+		log.Printf("Error fetching workloads: %v", err)
+		return "", err
+	}
+	defer response.Body.Close()
+
+	body, err := io.ReadAll(response.Body)
+	if err != nil {
+		log.Printf("Error reading response body: %v", err)
+		return "", err
+	}
+
+	return string(body), nil
+}
