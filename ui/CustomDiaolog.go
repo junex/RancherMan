@@ -47,6 +47,12 @@ func ShowSelectNamespaceDialog(window fyne.Window, db *rancher.DatabaseManager, 
 			}
 		}
 		list.Refresh()
+		if len(filteredNamespaces) >= 1 {
+			list.UnselectAll()
+			list.Select(0)
+		} else {
+			list.UnselectAll()
+		}
 	}
 
 	// 创建对话框内容
@@ -63,6 +69,11 @@ func ShowSelectNamespaceDialog(window fyne.Window, db *rancher.DatabaseManager, 
 		content,
 		window,
 	)
+
+	searchEntry.OnSubmitted = func(text string) {
+		dialog.Hide()
+		onSelect(selectedNamespace)
+	}
 
 	// 添加确定按钮
 	dialog.SetButtons([]fyne.CanvasObject{

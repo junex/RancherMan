@@ -183,9 +183,9 @@ func initView() fyne.Window {
 										destEnvironment, _ := rancher.GetEnvironmentFromConfig(gConfig, destNamespace.Environment)
 										err := rancher.ImportYaml(*destEnvironment, "big-data", yamlData)
 										if err != nil {
-											info.WriteString("导入失败!\n")
+											info.WriteString("克隆失败!\n")
 										} else {
-											info.WriteString("导入成功!\n")
+											info.WriteString("克隆成功!\n")
 										}
 									}
 								} else {
@@ -264,6 +264,9 @@ func initView() fyne.Window {
 		gNamespaceList.UnselectAll()
 		gNamespaceList.ScrollToTop()
 		gNamespaceList.Refresh()
+		if len(gFilteredNamespaces) >= 1 {
+			gNamespaceList.Select(0)
+		}
 		updateInfoArea()
 	}
 
@@ -328,6 +331,9 @@ func initView() fyne.Window {
 		gFilteredWorkloads = filterWorkloads(gWorkloads, s)
 		gWorkloadList.UnselectMulti()
 		gWorkloadList.RefreshList()
+		if len(gFilteredWorkloads) == 1 {
+			gWorkloadList.Select(0)
+		}
 		updateInfoArea()
 	}
 
