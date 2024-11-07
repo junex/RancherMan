@@ -666,7 +666,7 @@ func updateInfoAreaForSingleWorkload() {
 	if len(uploadConfigList) > 0 {
 		info.WriteString("\n上传配置:\n")
 		for _, config := range uploadConfigList {
-			info.WriteString(fmt.Sprintf("  目录: %s\n", config.Dir))
+			info.WriteString(fmt.Sprintf("  目录: %s\n", strings.ReplaceAll(config.Dir, "\\", "/")))
 			if config.Script != "" {
 				var script = config.Script
 				if strings.Count(config.Image, "$") == 1 {
@@ -674,7 +674,7 @@ func updateInfoAreaForSingleWorkload() {
 				} else if strings.Count(config.Image, "$") == 2 {
 					script = script + " " + tag + " " + imageDir
 				}
-				info.WriteString(fmt.Sprintf("  脚本: %s\n", script))
+				info.WriteString(fmt.Sprintf("  脚本: ./%s\n", script))
 			}
 			if config.Jar != "" {
 				info.WriteString(fmt.Sprintf("  Jar包: %s\n", config.Jar))
