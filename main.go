@@ -1,14 +1,13 @@
 package main
 
 import (
-	"RancherMan/component"
 	"RancherMan/rancher"
-	"RancherMan/rancher/types"
+	workload2 "RancherMan/rancher/types/workload"
+	"RancherMan/ui"
+	"RancherMan/ui/component"
 	"encoding/json"
 	"fmt"
 	"log"
-	"os"
-	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
@@ -129,86 +128,99 @@ func initView() fyne.Window {
 				initData()
 			}),
 		),
-		fyne.NewMenu("部署",
-			fyne.NewMenuItem("获取部署文件", func() {
-				var info strings.Builder
-				// 获取当前工作目录
-				currentDir, err := os.Getwd()
-				if err != nil {
-					info.WriteString(fmt.Sprintf("获取当前目录失败: %v\n", err))
-					gInfoArea.SetText(info.String())
-					return
-				}
+		fyne.NewMenu("克隆",
+			fyne.NewMenuItem("configMaps", func() {
 
-				// 创建deployment.yaml文件
-				filePath := filepath.Join(currentDir, "deployment.yaml")
-				file, err := os.Create(filePath)
-				if err != nil {
-					info.WriteString(fmt.Sprintf("创建文件失败: %v\n", err))
-					gInfoArea.SetText(info.String())
-					return
-				}
-				defer file.Close()
+			}),
+			fyne.NewMenuItem("deployment", func() {
+				ui.ShowSelectNamespaceDialog(myWindow, gDb, func(destNamespace rancher.Namespace) {
+					if destNamespace.Name == "" {
+						gInfoArea.SetText("未选择目标命名空间")
+					} else {
+						var info strings.Builder
 
-				info.WriteString(fmt.Sprintf("部署文件已保存至: %s\n", filePath))
+						processWorkloads := func(workloads []rancher.Workload) {
+							for _, workload := range workloads {
+								info.WriteString(fmt.Sprintf("获取deployment: %s\t", workload.Name))
+								deployment, err := rancher.GetDeploymentYaml(*gEnvironment, workload.Namespace, workload.Name)
+								if err == nil {
+									info.WriteString("成功!\n")
 
-				// 创建yaml编码器
-				yamlEncoder := yaml.NewEncoder(file)
-				defer yamlEncoder.Close()
-
-				processWorkloads := func(workloads []rancher.Workload) {
-					for _, workload := range workloads {
-						info.WriteString(fmt.Sprintf("获取deployment: %s\t", workload.Name))
-						deployment, err := rancher.GetDeploymentYaml(*gEnvironment, workload.Namespace, workload.Name)
-						if err == nil {
-							info.WriteString("成功!\n")
-
-							// 添加workload名称的注释
-							file.WriteString(fmt.Sprintf("# Deployment: %s\n", workload.Name))
-
-							// 将JSON转换为Deployment结构体
-							var deploymentStruct types.Deployment
-							if err := yaml.Unmarshal([]byte(deployment), &deploymentStruct); err != nil {
-								info.WriteString(fmt.Sprintf("解析deployment失败: %v\n", err))
-								continue
+									// 解析yaml
+									var deploymentStruct workload2.Deployment
+									if err := yaml.Unmarshal([]byte(deployment), &deploymentStruct); err != nil {
+										info.WriteString(fmt.Sprintf("解析deployment失败: %v\n", err))
+										continue
+									}
+									// 如果nodeSelectorTerms为空,添加默认的node selector
+									if len(deploymentStruct.Spec.Template.Spec.Affinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution.NodeSelectorTerms) == 0 {
+										deploymentStruct.Spec.Template.Spec.Affinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution.NodeSelectorTerms = []workload2.NodeSelectorTerm{
+											{
+												MatchExpressions: []workload2.MatchExpression{
+													{
+														Key:      "role",
+														Operator: "In",
+														Values:   []string{"node"},
+													},
+												},
+											},
+										}
+									}
+									deploymentStruct.Metadata.Namespace = destNamespace.Name
+									// 修改workloadselector标签
+									if deploymentStruct.Spec.Selector.MatchLabels == nil {
+										deploymentStruct.Spec.Selector.MatchLabels = make(map[string]string)
+									}
+									deploymentStruct.Spec.Selector.MatchLabels["workload.user.cattle.io/workloadselector"] = fmt.Sprintf("deployment-%s-%s", destNamespace.Name, workload.Name)
+									if deploymentStruct.Spec.Template.Metadata.Labels == nil {
+										deploymentStruct.Spec.Template.Metadata.Labels = make(map[string]string)
+									}
+									deploymentStruct.Spec.Template.Metadata.Labels["workload.user.cattle.io/workloadselector"] = fmt.Sprintf("deployment-%s-%s", destNamespace.Name, workload.Name)
+									// 编码yaml
+									if yamlData, err := yaml.Marshal(deploymentStruct); err != nil {
+										info.WriteString(fmt.Sprintf("写入YAML失败: %v\n", err))
+									} else {
+										destEnvironment, _ := rancher.GetEnvironmentFromConfig(gConfig, destNamespace.Environment)
+										err := rancher.ImportYaml(*destEnvironment, "big-data", yamlData)
+										if err != nil {
+											info.WriteString("导入失败!\n")
+										} else {
+											info.WriteString("导入成功!\n")
+										}
+									}
+								} else {
+									info.WriteString("失败!\n")
+								}
+								gInfoArea.SetText(info.String())
 							}
-
-							// 处理workloadselector标签
-							if selector, ok := deploymentStruct.Spec.Template.Metadata.Labels["workload.user.cattle.io/workloadselector"]; ok {
-								// 去掉deployment-前缀
-								selector = strings.TrimPrefix(selector, "deployment-")
-								// 去掉namespace-前缀
-								selector = strings.TrimPrefix(selector, workload.Namespace+"-")
-								deploymentStruct.Spec.Template.Metadata.Labels["workload.user.cattle.io/workloadselector"] = selector
-							}
-							// 处理matchLabels中的workloadselector
-							if selector, ok := deploymentStruct.Spec.Selector.MatchLabels["workload.user.cattle.io/workloadselector"]; ok {
-								// 去掉deployment-前缀
-								selector = strings.TrimPrefix(selector, "deployment-")
-								// 去掉namespace-前缀
-								selector = strings.TrimPrefix(selector, workload.Namespace+"-")
-								deploymentStruct.Spec.Selector.MatchLabels["workload.user.cattle.io/workloadselector"] = selector
-							}
-
-							// 将结构体编码为YAML并写入文件
-							if err := yamlEncoder.Encode(deploymentStruct); err != nil {
-								info.WriteString(fmt.Sprintf("写入YAML失败: %v\n", err))
-							}
-						} else {
-							info.WriteString("失败!\n")
 						}
+
+						if len(gSelectedWorkloads) > 0 {
+							// 处理多选的情况
+							processWorkloads(gSelectedWorkloads)
+						} else if len(gFilteredWorkloads) > 0 {
+							// 处理未选择的情况，使用过滤列表中的所有数据
+							processWorkloads(gFilteredWorkloads)
+						}
+
+						gInfoArea.SetText(info.String())
 					}
-				}
-
-				if len(gSelectedWorkloads) > 0 {
-					// 处理多选的情况
-					processWorkloads(gSelectedWorkloads)
-				} else if len(gFilteredWorkloads) > 0 {
-					// 处理未选择的情况，使用过滤列表中的所有数据
-					processWorkloads(gFilteredWorkloads)
-				}
-
-				gInfoArea.SetText(info.String())
+				})
+			}),
+			fyne.NewMenuItem("service", func() {
+				ui.ShowSelectNamespaceDialog(myWindow, gDb, func(destNamespace rancher.Namespace) {
+					if destNamespace.Name == "" {
+						gInfoArea.SetText("未选择目标命名空间")
+					} else {
+						//var info strings.Builder
+						var yamlBuffer strings.Builder
+						// 获取源命名空间的所有service
+						// 筛选选中服务的
+						// 修改namespace和selector,修改ownerReferences的uid
+						// 合并到yaml
+						gInfoArea.SetText(yamlBuffer.String())
+					}
+				})
 			}),
 		),
 		fyne.NewMenu("帮助",

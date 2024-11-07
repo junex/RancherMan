@@ -196,3 +196,45 @@ func GetDeploymentYaml(environment Environment, namespace string, workload strin
 
 	return string(body), nil
 }
+
+func GetServiceList(environment Environment, namespace string) {
+
+}
+
+func GetConfigMapsYaml(environment Environment, namespace string, name string) (string, error) {
+	project := environment.Project
+	url := fmt.Sprintf("project/%s/configMaps/%s:%s/yaml", project, namespace, name)
+	response, err := makeRequest(environment, "GET", url, nil, "application/yaml")
+	if err != nil {
+		log.Printf("Error fetching configMaps: %v", err)
+		return "", err
+	}
+	defer response.Body.Close()
+
+	body, err := io.ReadAll(response.Body)
+	if err != nil {
+		log.Printf("Error reading response body: %v", err)
+		return "", err
+	}
+
+	return string(body), nil
+}
+
+func ImportYaml(environment Environment, defaultNamespace string, yaml []byte) error {
+	payload := map[string]string{
+		"yaml":             string(yaml),
+		"defaultNamespace": defaultNamespace,
+	}
+	jsonPayload, err := json.Marshal(payload)
+	if err != nil {
+		log.Printf("Error marshaling yaml payload: %v", err)
+		return err
+	}
+	response, err := makeRequest(environment, "POST", "clusters/local?action=importYaml", jsonPayload, "")
+	if err != nil {
+		log.Printf("Error importing yaml: %v", err)
+		return err
+	}
+	defer response.Body.Close()
+	return nil
+}

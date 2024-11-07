@@ -1,4 +1,4 @@
-package types
+package workload
 
 // Deployment 表示 Kubernetes Deployment 资源
 type Deployment struct {
@@ -10,7 +10,8 @@ type Deployment struct {
 
 // Metadata 表示资源元数据
 type Metadata struct {
-	Name string `yaml:"name" json:"name"`
+	Name      string `yaml:"name" json:"name"`
+	Namespace string `yaml:"namespace" json:"namespace"`
 }
 
 // Spec 表示 Deployment 的规格
@@ -43,10 +44,17 @@ type PodMetadata struct {
 
 // PodSpec 表示 Pod 规格
 type PodSpec struct {
+	HostAliases      []HostAlias  `yaml:"hostAliases,omitempty" json:"hostAliases,omitempty"`
 	Affinity         Affinity     `yaml:"affinity" json:"affinity"`
 	Containers       []Container  `yaml:"containers" json:"containers"`
 	ImagePullSecrets []PullSecret `yaml:"imagePullSecrets" json:"imagePullSecrets"`
 	SchedulerName    string       `yaml:"schedulerName" json:"schedulerName"`
+	Volumes          []Volume     `yaml:"volumes" json:"volumes"`
+}
+
+type HostAlias struct {
+	IP        string   `yaml:"ip" json:"ip"`
+	Hostnames []string `yaml:"hostnames" json:"hostnames"`
 }
 
 // Affinity 表示节点亲和性
@@ -78,13 +86,13 @@ type MatchExpression struct {
 
 // Container 表示容器配置
 type Container struct {
-	Name            string   `yaml:"name" json:"name"`
-	Image           string   `yaml:"image" json:"image"`
-	Args            []string `yaml:"args,omitempty" json:"args,omitempty"`
-	Ports           []Port   `yaml:"ports,omitempty" json:"ports,omitempty"`
-	Env             []EnvVar `yaml:"env,omitempty" json:"env,omitempty"`
-	ImagePullPolicy string   `yaml:"imagePullPolicy,omitempty" json:"imagePullPolicy,omitempty"`
-	//VolumeMounts    []VolumeMount    `yaml:"volumeMounts,omitempty" json:"volumeMounts,omitempty"`
+	Name            string           `yaml:"name" json:"name"`
+	Image           string           `yaml:"image" json:"image"`
+	Args            []string         `yaml:"args,omitempty" json:"args,omitempty"`
+	Ports           []Port           `yaml:"ports,omitempty" json:"ports,omitempty"`
+	Env             []EnvVar         `yaml:"env,omitempty" json:"env,omitempty"`
+	ImagePullPolicy string           `yaml:"imagePullPolicy,omitempty" json:"imagePullPolicy,omitempty"`
+	VolumeMounts    []VolumeMount    `yaml:"volumeMounts,omitempty" json:"volumeMounts,omitempty"`
 	SecurityContext *SecurityContext `yaml:"securityContext,omitempty" json:"securityContext,omitempty"`
 }
 
@@ -117,4 +125,22 @@ type EnvVar struct {
 // PullSecret 表示镜像拉取密钥
 type PullSecret struct {
 	Name string `yaml:"name" json:"name"`
+}
+
+// Volume 表示数据卷配置
+type Volume struct {
+	Name                  string                 `yaml:"name" json:"name"`
+	ConfigMap             *ConfigMap             `yaml:"configMap,omitempty" json:"configMap,omitempty"`
+	PersistentVolumeClaim *PersistentVolumeClaim `yaml:"persistentVolumeClaim,omitempty" json:"persistentVolumeClaim,omitempty"`
+}
+
+// ConfigMap 表示 ConfigMap 卷配置
+type ConfigMap struct {
+	DefaultMode *int32 `yaml:"defaultMode,omitempty" json:"defaultMode,omitempty"`
+	Name        string `yaml:"name" json:"name"`
+	Optional    *bool  `yaml:"optional,omitempty" json:"optional,omitempty"`
+}
+
+type PersistentVolumeClaim struct {
+	ClaimName string `yaml:"claimName" json:"claimName"`
 }
