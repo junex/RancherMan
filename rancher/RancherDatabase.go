@@ -16,6 +16,7 @@ type Workload struct {
 	Namespace            string `gorm:"size:50;not null"`
 	Name                 string `gorm:"size:30;not null"`
 	Image                string `gorm:"size:100"`
+	ImagePullPolicy      string `gorm:"size:20"`
 	ContainerEnvironment string `gorm:"size:255"`
 	NodePort             string `gorm:"size:100"`
 	AccessPath           string `gorm:"size:500"`

@@ -525,7 +525,9 @@ func updateInfoAreaForSingleWorkload() {
 			info.WriteString(fmt.Sprintf("  %s:%s\n", ip, strings.TrimSpace(port)))
 		}
 	}
-
+	if workload.ImagePullPolicy != "" {
+		info.WriteString(fmt.Sprintf("镜像拉取策略: %s\n", workload.ImagePullPolicy))
+	}
 	// 只有当 AccessPath 不为空时才显示，并按逗号分隔成多行
 	if workload.AccessPath != "" {
 		info.WriteString("访问路径:\n")

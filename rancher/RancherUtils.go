@@ -89,9 +89,10 @@ func UpdateEnvironment(db *DatabaseManager, envName string, environment *Environ
 
 		var workloadsDBList []Workload
 		for _, workload := range workloadList {
-			var image, containerEnvironment, nodePort string
+			var image, imagePullPolicy, containerEnvironment, nodePort string
 			if len(workload.Containers) == 1 {
 				image = workload.Containers[0].Image
+				imagePullPolicy = workload.Containers[0].ImagePullPolicy
 				if envData, err := json.Marshal(workload.Containers[0].Environment); err == nil {
 					containerEnvironment = string(envData)
 				}
@@ -109,6 +110,7 @@ func UpdateEnvironment(db *DatabaseManager, envName string, environment *Environ
 				Namespace:            workload.NamespaceID,
 				Name:                 workload.Name,
 				Image:                image,
+				ImagePullPolicy:      imagePullPolicy,
 				ContainerEnvironment: containerEnvironment,
 				NodePort:             nodePort,
 				AccessPath:           accessPath,

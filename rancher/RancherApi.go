@@ -19,8 +19,9 @@ type WorkloadResp struct {
 }
 
 type Container struct {
-	Image       string
-	Environment map[string]string
+	Image           string
+	ImagePullPolicy string
+	Environment     map[string]string
 }
 
 type Endpoint struct {
