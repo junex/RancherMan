@@ -10,8 +10,10 @@ type Deployment struct {
 
 // Metadata 表示资源元数据
 type Metadata struct {
-	Name      string `yaml:"name" json:"name"`
-	Namespace string `yaml:"namespace" json:"namespace"`
+	Name        string            `yaml:"name" json:"name"`
+	Namespace   string            `yaml:"namespace,omitempty" json:"namespace,omitempty"`
+	Annotations map[string]string `yaml:"annotations,omitempty" json:"annotations,omitempty"`
+	Labels      map[string]string `yaml:"labels,omitempty" json:"labels,omitempty"`
 }
 
 // Spec 表示 Deployment 的规格
@@ -39,7 +41,8 @@ type Template struct {
 
 // PodMetadata 表示 Pod 元数据
 type PodMetadata struct {
-	Labels map[string]string `yaml:"labels" json:"labels"`
+	Labels      map[string]string `yaml:"labels" json:"labels"`
+	Annotations map[string]string `yaml:"annotations,omitempty" json:"annotations,omitempty"`
 }
 
 // PodSpec 表示 Pod 规格

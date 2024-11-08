@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"os"
 	"sort"
 	"strconv"
 	"strings"
@@ -128,98 +129,25 @@ func initView() fyne.Window {
 				initData()
 			}),
 		),
-		fyne.NewMenu("克隆",
-			fyne.NewMenuItem("configMaps", func() {
-
-			}),
-			fyne.NewMenuItem("deployment", func() {
+		fyne.NewMenu("克隆和导出",
+			fyne.NewMenuItem("导出configMap", func() {
 				ui.ShowSelectNamespaceDialog(myWindow, gDb, func(destNamespace rancher.Namespace) {
-					if destNamespace.Name == "" {
-						gInfoArea.SetText("未选择目标命名空间")
-					} else {
-						var info strings.Builder
-
-						processWorkloads := func(workloads []rancher.Workload) {
-							for _, workload := range workloads {
-								info.WriteString(fmt.Sprintf("获取deployment: %s\t", workload.Name))
-								deployment, err := rancher.GetDeploymentYaml(*gEnvironment, workload.Namespace, workload.Name)
-								if err == nil {
-									info.WriteString("成功!\n")
-
-									// 解析yaml
-									var deploymentStruct workload2.Deployment
-									if err := yaml.Unmarshal([]byte(deployment), &deploymentStruct); err != nil {
-										info.WriteString(fmt.Sprintf("解析deployment失败: %v\n", err))
-										continue
-									}
-									// 如果nodeSelectorTerms为空,添加默认的node selector
-									if len(deploymentStruct.Spec.Template.Spec.Affinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution.NodeSelectorTerms) == 0 {
-										deploymentStruct.Spec.Template.Spec.Affinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution.NodeSelectorTerms = []workload2.NodeSelectorTerm{
-											{
-												MatchExpressions: []workload2.MatchExpression{
-													{
-														Key:      "role",
-														Operator: "In",
-														Values:   []string{"node"},
-													},
-												},
-											},
-										}
-									}
-									deploymentStruct.Metadata.Namespace = destNamespace.Name
-									// 修改workloadselector标签
-									if deploymentStruct.Spec.Selector.MatchLabels == nil {
-										deploymentStruct.Spec.Selector.MatchLabels = make(map[string]string)
-									}
-									deploymentStruct.Spec.Selector.MatchLabels["workload.user.cattle.io/workloadselector"] = fmt.Sprintf("deployment-%s-%s", destNamespace.Name, workload.Name)
-									if deploymentStruct.Spec.Template.Metadata.Labels == nil {
-										deploymentStruct.Spec.Template.Metadata.Labels = make(map[string]string)
-									}
-									deploymentStruct.Spec.Template.Metadata.Labels["workload.user.cattle.io/workloadselector"] = fmt.Sprintf("deployment-%s-%s", destNamespace.Name, workload.Name)
-									// 编码yaml
-									if yamlData, err := yaml.Marshal(deploymentStruct); err != nil {
-										info.WriteString(fmt.Sprintf("写入YAML失败: %v\n", err))
-									} else {
-										destEnvironment, _ := rancher.GetEnvironmentFromConfig(gConfig, destNamespace.Environment)
-										err := rancher.ImportYaml(*destEnvironment, "big-data", yamlData)
-										if err != nil {
-											info.WriteString("克隆失败!\n")
-										} else {
-											info.WriteString("克隆成功!\n")
-										}
-									}
-								} else {
-									info.WriteString("失败!\n")
-								}
-								gInfoArea.SetText(info.String())
-							}
-						}
-
-						if len(gSelectedWorkloads) > 0 {
-							// 处理多选的情况
-							processWorkloads(gSelectedWorkloads)
-						} else if len(gFilteredWorkloads) > 0 {
-							// 处理未选择的情况，使用过滤列表中的所有数据
-							processWorkloads(gFilteredWorkloads)
-						}
-
-						gInfoArea.SetText(info.String())
-					}
+					cloneOrExportConfigMap(false, destNamespace)
 				})
 			}),
-			fyne.NewMenuItem("service", func() {
+			fyne.NewMenuItem("克隆configMap", func() {
 				ui.ShowSelectNamespaceDialog(myWindow, gDb, func(destNamespace rancher.Namespace) {
-					if destNamespace.Name == "" {
-						gInfoArea.SetText("未选择目标命名空间")
-					} else {
-						//var info strings.Builder
-						var yamlBuffer strings.Builder
-						// 获取源命名空间的所有service
-						// 筛选选中服务的
-						// 修改namespace和selector,修改ownerReferences的uid
-						// 合并到yaml
-						gInfoArea.SetText(yamlBuffer.String())
-					}
+					cloneOrExportConfigMap(false, destNamespace)
+				})
+			}),
+			fyne.NewMenuItem("导出workload", func() {
+				ui.ShowSelectNamespaceDialog(myWindow, gDb, func(destNamespace rancher.Namespace) {
+					cloneOrExportWorkload(false, destNamespace)
+				})
+			}),
+			fyne.NewMenuItem("克隆workload", func() {
+				ui.ShowSelectNamespaceDialog(myWindow, gDb, func(destNamespace rancher.Namespace) {
+					cloneOrExportWorkload(true, destNamespace)
 				})
 			}),
 		),
@@ -346,9 +274,9 @@ func initView() fyne.Window {
 	gInfoArea.SetMinRowsVisible(15)
 	// 将 InfoArea 放固定大小的容器中
 	infoContainer := container.NewScroll(gInfoArea)
-	infoContainer.SetMinSize(fyne.NewSize(550, 380))
+	infoContainer.SetMinSize(fyne.NewSize(600, 380))
 
-	// 添加更新pod按钮
+	// 添加更pod按钮
 	buttonUpdatePod := widget.NewButton("更新Pod", func() {
 		var info strings.Builder
 		if gEnvironment != nil {
@@ -376,7 +304,7 @@ func initView() fyne.Window {
 		if len(gSelectedWorkloads) > 0 {
 			// 处理多选的情况
 			for _, workload := range gSelectedWorkloads {
-				info.WriteString(fmt.Sprintf("打开: %s\t", workload.Name))
+				info.WriteString(fmt.Sprintf("打开: %s", workload.Name))
 				success := rancher.Scale(*gEnvironment, workload.Namespace, workload.Name, 1)
 				if success {
 					info.WriteString("成功!\n")
@@ -387,7 +315,7 @@ func initView() fyne.Window {
 		} else if len(gFilteredWorkloads) > 0 {
 			// 处理未选择的情况，使用过滤列表中的所有数据
 			for _, workload := range gFilteredWorkloads {
-				info.WriteString(fmt.Sprintf("打开: %s\t", workload.Name))
+				info.WriteString(fmt.Sprintf("打开: %s    ", workload.Name))
 				success := rancher.Scale(*gEnvironment, workload.Namespace, workload.Name, 1)
 				if success {
 					info.WriteString("成功!\n")
@@ -403,7 +331,7 @@ func initView() fyne.Window {
 		if len(gSelectedWorkloads) > 0 {
 			// 处理多选的情况
 			for _, workload := range gSelectedWorkloads {
-				info.WriteString(fmt.Sprintf("关闭: %s\t", workload.Name))
+				info.WriteString(fmt.Sprintf("关闭: %s    ", workload.Name))
 				success := rancher.Scale(*gEnvironment, workload.Namespace, workload.Name, 0)
 				if success {
 					info.WriteString("成功!\n")
@@ -414,7 +342,7 @@ func initView() fyne.Window {
 		} else if len(gFilteredWorkloads) > 0 {
 			// 处理未选择的情况，使用过滤列表中的所有数据
 			for _, workload := range gFilteredWorkloads {
-				info.WriteString(fmt.Sprintf("关闭: %s\t", workload.Name))
+				info.WriteString(fmt.Sprintf("关闭: %s    ", workload.Name))
 				success := rancher.Scale(*gEnvironment, workload.Namespace, workload.Name, 0)
 				if success {
 					info.WriteString("成功!\n")
@@ -430,7 +358,7 @@ func initView() fyne.Window {
 		if len(gSelectedWorkloads) > 0 {
 			// 处理多选的情况
 			for _, workload := range gSelectedWorkloads {
-				info.WriteString(fmt.Sprintf("重新部署: %s\t", workload.Name))
+				info.WriteString(fmt.Sprintf("重新部署: %s    ", workload.Name))
 				success := rancher.Redeploy(*gEnvironment, workload.Namespace, workload.Name)
 				if success {
 					info.WriteString("成功!\n")
@@ -441,7 +369,7 @@ func initView() fyne.Window {
 		} else if len(gFilteredWorkloads) > 0 {
 			// 处理未选择的情况，使用过滤列表中的所有数据
 			for _, workload := range gFilteredWorkloads {
-				info.WriteString(fmt.Sprintf("重新部署: %s\t", workload.Name))
+				info.WriteString(fmt.Sprintf("重新部署: %s    ", workload.Name))
 				success := rancher.Redeploy(*gEnvironment, workload.Namespace, workload.Name)
 				if success {
 					info.WriteString("成功!\n")
@@ -726,6 +654,162 @@ func filterWorkloads(items []rancher.Workload, filter string) []rancher.Workload
 		}
 	}
 	return filtered
+}
+
+func cloneOrExportWorkload(isClone bool, destNamespace rancher.Namespace) {
+	if isClone && destNamespace.Name == "" {
+		gInfoArea.SetText("未选择目标命名空间")
+		return
+	}
+
+	var info strings.Builder
+	var allYaml strings.Builder // 用于存储所有workload的YAML
+
+	processWorkloads := func(workloads []rancher.Workload) {
+		for _, workload := range workloads {
+			info.WriteString(fmt.Sprintf("获取deployment: %s    ", workload.Name))
+			deployment, err := rancher.GetDeploymentYaml(*gEnvironment, workload.Namespace, workload.Name)
+			if err == nil {
+				info.WriteString("成功!\n")
+				// 替换deployment名称中的namespace
+				if destNamespace.Name != "" {
+					deployment = strings.ReplaceAll(deployment, fmt.Sprintf(":\"%s:", workload.Namespace), fmt.Sprintf(":\"%s:", destNamespace.Name))
+					deployment = strings.ReplaceAll(deployment, fmt.Sprintf("deployment-%s-", workload.Namespace), fmt.Sprintf("deployment-%s-", destNamespace.Name))
+				}
+				// 解析yaml
+				var deploymentStruct workload2.Deployment
+				if err := yaml.Unmarshal([]byte(deployment), &deploymentStruct); err != nil {
+					info.WriteString(fmt.Sprintf("解析deployment失败: %v\n", err))
+					continue
+				}
+				// 如果nodeSelectorTerms为空,添加默认的node selector
+				if len(deploymentStruct.Spec.Template.Spec.Affinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution.NodeSelectorTerms) == 0 {
+					deploymentStruct.Spec.Template.Spec.Affinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution.NodeSelectorTerms = []workload2.NodeSelectorTerm{
+						{
+							MatchExpressions: []workload2.MatchExpression{
+								{
+									Key:      "role",
+									Operator: "In",
+									Values:   []string{"node"},
+								},
+							},
+						},
+					}
+				}
+				if destNamespace.Name != "" {
+					deploymentStruct.Metadata.Namespace = destNamespace.Name
+				}
+				// 编码yaml
+				yamlData, err := yaml.Marshal(deploymentStruct)
+				if err != nil {
+					info.WriteString(fmt.Sprintf("写入YAML失败: %v\n", err))
+					continue
+				}
+
+				if isClone {
+					// 克隆模式：导入到Rancher
+					destEnvironment, _ := rancher.GetEnvironmentFromConfig(gConfig, destNamespace.Environment)
+					err := rancher.ImportYaml(*destEnvironment, "big-data", yamlData)
+					if err != nil {
+						info.WriteString("克隆失败!\n")
+					} else {
+						info.WriteString("克隆成功!\n")
+					}
+				} else {
+					allYaml.WriteString(fmt.Sprintf("# workload %s\n", workload.Name))
+					// 导出模式：添加到YAML字符串
+					allYaml.WriteString("---\n") // YAML文档分隔符
+					allYaml.Write(yamlData)
+					allYaml.WriteString("\n")
+					info.WriteString("已添加到导出文件\n")
+				}
+			} else {
+				info.WriteString("失败!\n")
+			}
+			gInfoArea.SetText(info.String())
+		}
+	}
+
+	if len(gSelectedWorkloads) > 0 {
+		processWorkloads(gSelectedWorkloads)
+	} else if len(gFilteredWorkloads) > 0 {
+		processWorkloads(gFilteredWorkloads)
+	}
+
+	// 如果是导出模式，将所有YAML写入文件
+	if !isClone && allYaml.Len() > 0 {
+		err := os.WriteFile("workloads.yaml", []byte(allYaml.String()), 0644)
+		if err != nil {
+			info.WriteString(fmt.Sprintf("\n导出到文件失败: %v", err))
+		} else {
+			info.WriteString("\n已成功导出到 workloads.yaml")
+		}
+	}
+
+	gInfoArea.SetText(info.String())
+}
+
+func cloneOrExportConfigMap(isClone bool, destNamespace rancher.Namespace) {
+	if isClone && destNamespace.Name == "" {
+		gInfoArea.SetText("未选择目标命名空间")
+		return
+	}
+
+	var info strings.Builder
+	var allYaml strings.Builder // 用于存储所有workload的YAML
+	list, err := rancher.GetConfigMapList(*gEnvironment, gSelectedNamespace.Name)
+	if err != nil {
+		gInfoArea.SetText("获取配置时出错")
+		return
+	}
+
+	for _, configMap := range list {
+		info.WriteString(fmt.Sprintf("获取configMap: %s    ", configMap.Name))
+		configMap.ApiVersion = "v1"
+		configMap.Kind = "ConfigMap"
+		configMap.Metadata.Name = configMap.Name
+		if destNamespace.Name != "" {
+			configMap.Metadata.Namespace = destNamespace.Name
+		}
+
+		// 编码yaml
+		yamlData, err := yaml.Marshal(configMap)
+		if err != nil {
+			info.WriteString(fmt.Sprintf("写入YAML失败: %v\n", err))
+			continue
+		}
+
+		if isClone {
+			// 克隆模式：导入到Rancher
+			destEnvironment, _ := rancher.GetEnvironmentFromConfig(gConfig, destNamespace.Environment)
+			err := rancher.ImportYaml(*destEnvironment, "big-data", yamlData)
+			if err != nil {
+				info.WriteString("克隆失败!\n")
+			} else {
+				info.WriteString("克隆成功!\n")
+			}
+		} else {
+			allYaml.WriteString(fmt.Sprintf("# configMap %s\n", configMap.Name))
+			// 导出模式：添加到YAML字符串
+			allYaml.WriteString("---\n") // YAML文档分隔符
+			allYaml.Write(yamlData)
+			allYaml.WriteString("\n")
+			info.WriteString("已添加到导出文件\n")
+		}
+		gInfoArea.SetText(info.String())
+	}
+
+	// 如果是导出模式，将所有YAML写入文件
+	if !isClone && allYaml.Len() > 0 {
+		err := os.WriteFile("configMaps.yaml", []byte(allYaml.String()), 0644)
+		if err != nil {
+			info.WriteString(fmt.Sprintf("\n导出到文件失败: %v", err))
+		} else {
+			info.WriteString("\n已成功导出到 configMaps.yaml")
+		}
+	}
+
+	gInfoArea.SetText(info.String())
 }
 
 // 在 main.go 中添加以下结构体和方法

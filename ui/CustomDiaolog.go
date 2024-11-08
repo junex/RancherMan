@@ -51,6 +51,7 @@ func ShowSelectNamespaceDialog(window fyne.Window, db *rancher.DatabaseManager, 
 			list.UnselectAll()
 			list.Select(0)
 		} else {
+			selectedNamespace = rancher.Namespace{}
 			list.UnselectAll()
 		}
 	}

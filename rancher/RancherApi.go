@@ -1,6 +1,7 @@
 package rancher
 
 import (
+	"RancherMan/rancher/types/configMaps"
 	"crypto/tls"
 	"encoding/json"
 	"fmt"
@@ -197,27 +198,22 @@ func GetDeploymentYaml(environment Environment, namespace string, workload strin
 	return string(body), nil
 }
 
-func GetServiceList(environment Environment, namespace string) {
-
-}
-
-func GetConfigMapsYaml(environment Environment, namespace string, name string) (string, error) {
-	project := environment.Project
-	url := fmt.Sprintf("project/%s/configMaps/%s:%s/yaml", project, namespace, name)
-	response, err := makeRequest(environment, "GET", url, nil, "application/yaml")
+func GetConfigMapList(environment Environment, namespace string) ([]configMaps.ConfigMap, error) {
+	resp, err := makeProjectRequest(environment, "GET", fmt.Sprintf("configMap?namespaceId=%s&limit=-1", namespace), nil)
 	if err != nil {
-		log.Printf("Error fetching configMaps: %v", err)
-		return "", err
-	}
-	defer response.Body.Close()
-
-	body, err := io.ReadAll(response.Body)
-	if err != nil {
-		log.Printf("Error reading response body: %v", err)
-		return "", err
+		log.Printf("Error fetching configMap: %v", err)
+		return nil, err
 	}
 
-	return string(body), nil
+	var configMapsResponse struct {
+		Data []configMaps.ConfigMap `json:"data"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&configMapsResponse); err != nil {
+		log.Printf("Error decoding configMap: %v", err)
+		return nil, err
+	}
+	resp.Body.Close()
+	return configMapsResponse.Data, nil
 }
 
 func ImportYaml(environment Environment, defaultNamespace string, yaml []byte) error {
