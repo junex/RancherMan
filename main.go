@@ -520,6 +520,7 @@ func updateInfoAreaForSingleWorkload() {
 	info.WriteString(fmt.Sprintf("命名空间: %s\n", workload.Namespace))
 	info.WriteString(fmt.Sprintf("名称: %s\n", workload.Name))
 	info.WriteString(fmt.Sprintf("镜像: %s\n", workload.Image))
+	info.WriteString(fmt.Sprintf("镜像拉取策略: %s\n", workload.ImagePullPolicy))
 	info.WriteString(fmt.Sprintf("pod数量: %d\n", len(podList)))
 	if len(podList) > 0 {
 		var states []string
@@ -544,9 +545,6 @@ func updateInfoAreaForSingleWorkload() {
 		for _, port := range services {
 			info.WriteString(fmt.Sprintf("  %s    %s    %d->%s:%d\n", port.PortName, port.PortProtocol, port.Port, ip, port.NodePort))
 		}
-	}
-	if workload.ImagePullPolicy != "" {
-		info.WriteString(fmt.Sprintf("镜像拉取策略: %s\n", workload.ImagePullPolicy))
 	}
 	// 只有当 AccessPath 不为空时才显示，并按逗号分隔成多行
 	if workload.AccessPath != "" {
