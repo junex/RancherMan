@@ -12,13 +12,13 @@ import (
 // Workload 工作负载模型
 type Workload struct {
 	ID                   uint   `gorm:"primaryKey"`
-	Environment          string `gorm:"size:20;not null"`
-	Namespace            string `gorm:"size:50;not null"`
-	Name                 string `gorm:"size:30;not null"`
+	Environment          string `gorm:"size:20"`
+	ProjectId            string `gorm:"size:20"`
+	Namespace            string `gorm:"size:50"`
+	Name                 string `gorm:"size:30"`
 	Image                string `gorm:"size:100"`
 	ImagePullPolicy      string `gorm:"size:20"`
 	ContainerEnvironment string `gorm:"size:255"`
-	NodePort             string `gorm:"size:100"`
 	AccessPath           string `gorm:"size:500"`
 }
 
@@ -74,6 +74,26 @@ type UploadConfig struct {
 
 func (UploadConfig) TableName() string {
 	return "upload_config"
+}
+
+// Service 服务模型
+type Service struct {
+	ID           uint   `gorm:"primaryKey"`
+	Environment  string `gorm:"size:20"`
+	ProjectId    string `gorm:"size:20"`
+	NamespaceId  string `gorm:"size:20"`
+	Name         string `gorm:"size:20"`
+	WorkloadId   string `gorm:"size:40"`
+	Kind         string `gorm:"size:10"`
+	PortName     string `gorm:"size:50"`
+	PortProtocol string `gorm:"size:10"`
+	Port         int
+	TargetPort   int
+	NodePort     int
+}
+
+func (Service) TableName() string {
+	return "service"
 }
 
 // DatabaseManager 数据库管理器结构体
@@ -136,7 +156,7 @@ func (dm *DatabaseManager) Close() error {
 
 // initDatabase 初始化数据库，创建必要的表
 func (dm *DatabaseManager) initDatabase() error {
-	return dm.db.AutoMigrate(&Workload{}, &Config{}, &Namespace{}, &Pod{}, &UploadConfig{})
+	return dm.db.AutoMigrate(&Workload{}, &Config{}, &Namespace{}, &Pod{}, &UploadConfig{}, &Service{})
 }
 
 // GetWorkloadDetailsByEnvNamespace 根据环境和命名空间获取工作负载详细信息
@@ -244,7 +264,7 @@ func (dm *DatabaseManager) GetWorkloadByID(id uint) (*Workload, error) {
 	return &workload, result.Error
 }
 
-// GetWorkloadsByNamespace 根据命名空间获取工作负载列表
+// GetWorkloadsByNamespace 根据命��空间获取工作负载列表
 func (dm *DatabaseManager) GetWorkloadsByNamespace(namespace string) ([]Workload, error) {
 	var workloads []Workload
 	result := dm.db.Where("namespace = ?", namespace).Find(&workloads)
@@ -341,6 +361,11 @@ func (dm *DatabaseManager) ClearAllData() error {
 			return err
 		}
 
+		// 清除service数据
+		if err := tx.Exec("DELETE FROM service").Error; err != nil {
+			return err
+		}
+
 		return nil
 	})
 }
@@ -381,4 +406,30 @@ func (dm *DatabaseManager) GetUploadConfigsByImageLikeSpecial2(image string) ([]
 	var configs []UploadConfig
 	result := dm.db.Where("image LIKE ?", "%/$%/"+image+":$%").Find(&configs)
 	return configs, result.Error
+}
+
+// GetServicesByWorkload 根据环境、项目ID、命名空间ID和工作负载ID查询服务列表
+func (dm *DatabaseManager) GetServicesByWorkload(environment, projectId, namespaceId, workloadId string, kind string) ([]Service, error) {
+	var services []Service
+	result := dm.db.Where("environment = ? AND project_id = ? AND namespace_id = ? AND workload_id = ? AND kind = ?",
+		environment, projectId, namespaceId, workloadId, kind).Find(&services)
+	return services, result.Error
+}
+
+// DeleteServiceByEnvironment 根据环境删除服务
+func (dm *DatabaseManager) DeleteServiceByEnvironment(environment string) (int64, error) {
+	result := dm.db.Where("environment = ?", environment).Delete(&Service{})
+	return result.RowsAffected, result.Error
+}
+
+// InsertServices 批量插入服务数据
+func (dm *DatabaseManager) InsertServices(services []Service) error {
+	return dm.db.Transaction(func(tx *gorm.DB) error {
+		for _, service := range services {
+			if err := tx.Create(&service).Error; err != nil {
+				return err
+			}
+		}
+		return nil
+	})
 }

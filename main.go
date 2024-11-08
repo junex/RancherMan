@@ -76,26 +76,6 @@ func initView() fyne.Window {
 			}),
 		),
 		fyne.NewMenu("数据",
-			fyne.NewMenuItem("更新跳板机", func() {
-				if gJumpHostConfig == nil {
-					gInfoArea.SetText("错误：未配置跳板机信息")
-					return
-				}
-
-				// 创建进度监听器
-				listener := &jumpHostProgressListener{
-					infoArea: gInfoArea,
-				}
-
-				// 清空信息区域并显示初始信息
-				gInfoArea.SetText("开始扫描跳板机配置...\n")
-
-				// 在新的 goroutine 中执行耗时操作
-				go func() {
-					gDb.DeleteAllUploadConfigs()
-					rancher.ListUploadConfig(gJumpHostConfig, 50, listener)
-				}()
-			}),
 			fyne.NewMenuItem("更新数据", func() {
 				var info strings.Builder
 				if gEnvironment != nil {
@@ -117,6 +97,47 @@ func initView() fyne.Window {
 					}
 				}
 				initData()
+			}),
+			fyne.NewMenuItem("更新端口映射", func() {
+				var info strings.Builder
+				if gEnvironment != nil {
+					// 只更新当前选中的环境
+					info.WriteString(fmt.Sprintf("更新端口映射: %s ", gEnvironment.Name))
+					gInfoArea.SetText(info.String())
+					rancher.UpdateService(gDb, gEnvironment.ID, gEnvironment)
+					info.WriteString("完成!\n")
+					gInfoArea.SetText(info.String())
+				} else {
+					// 如果没有选中环境，则更新所有环境
+					for envName, _ := range gConfig["environment"].(map[interface{}]interface{}) {
+						environment, _ := rancher.GetEnvironmentFromConfig(gConfig, envName.(string))
+						info.WriteString(fmt.Sprintf("更新端口映射: %s ", environment.Name))
+						gInfoArea.SetText(info.String())
+						rancher.UpdateService(gDb, environment.ID, environment)
+						info.WriteString("完成!\n")
+						gInfoArea.SetText(info.String())
+					}
+				}
+			}),
+			fyne.NewMenuItem("更新跳板机", func() {
+				if gJumpHostConfig == nil {
+					gInfoArea.SetText("错误：未配置跳板机信息")
+					return
+				}
+
+				// 创建进度监听器
+				listener := &jumpHostProgressListener{
+					infoArea: gInfoArea,
+				}
+
+				// 清空信息区域并显示初始信息
+				gInfoArea.SetText("开始扫描跳板机配置...\n")
+
+				// 在新的 goroutine 中执行耗时操作
+				go func() {
+					gDb.DeleteAllUploadConfigs()
+					rancher.ListUploadConfig(gJumpHostConfig, 50, listener)
+				}()
 			}),
 			fyne.NewMenuItem("清空数据", func() {
 				err := gDb.ClearAllData()
@@ -516,13 +537,12 @@ func updateInfoAreaForSingleWorkload() {
 			}
 		}
 	}
-	// 只有当 NodePort 不为空时才显示，并按逗号分隔成多行
-	if workload.NodePort != "" {
+	services, err := gDb.GetServicesByWorkload(workload.Environment, workload.ProjectId, workload.Namespace, workload.Name, "NodePort")
+	if err == nil && len(services) > 0 {
 		info.WriteString("端口访问:\n")
-		ports := strings.Split(workload.NodePort, ",")
 		ip := gEnvironment.Ip
-		for _, port := range ports {
-			info.WriteString(fmt.Sprintf("  %s:%s\n", ip, strings.TrimSpace(port)))
+		for _, port := range services {
+			info.WriteString(fmt.Sprintf("  %s    %s    %d->%s:%d\n", port.PortName, port.PortProtocol, port.Port, ip, port.NodePort))
 		}
 	}
 	if workload.ImagePullPolicy != "" {

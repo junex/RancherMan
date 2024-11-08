@@ -2,7 +2,6 @@ package rancher
 
 import (
 	"fmt"
-	"strconv"
 	"strings"
 
 	"encoding/json"
@@ -89,7 +88,7 @@ func UpdateEnvironment(db *DatabaseManager, envName string, environment *Environ
 
 		var workloadsDBList []Workload
 		for _, workload := range workloadList {
-			var image, imagePullPolicy, containerEnvironment, nodePort string
+			var image, imagePullPolicy, containerEnvironment string
 			if len(workload.Containers) == 1 {
 				image = workload.Containers[0].Image
 				imagePullPolicy = workload.Containers[0].ImagePullPolicy
@@ -97,26 +96,61 @@ func UpdateEnvironment(db *DatabaseManager, envName string, environment *Environ
 					containerEnvironment = string(envData)
 				}
 			}
-			if len(workload.PublicEndpoints) > 0 {
-				ports := make([]string, len(workload.PublicEndpoints))
-				for i, endpoint := range workload.PublicEndpoints {
-					ports[i] = strconv.Itoa(endpoint.Port)
-				}
-				nodePort = strings.Join(ports, ",")
-			}
 			accessPath := LookupService(lookupDict, workload.Name, workload.NamespaceID)
 			workloadsDBList = append(workloadsDBList, Workload{
 				Environment:          envName,
 				Namespace:            workload.NamespaceID,
+				ProjectId:            workload.ProjectID,
 				Name:                 workload.Name,
 				Image:                image,
 				ImagePullPolicy:      imagePullPolicy,
 				ContainerEnvironment: containerEnvironment,
-				NodePort:             nodePort,
 				AccessPath:           accessPath,
 			})
 		}
 		db.InsertWorkloads(workloadsDBList)
+	}
+}
+
+func UpdateService(db *DatabaseManager, envName string, environment *Environment) {
+	// 删除旧的pod数据
+	db.DeleteServiceByEnvironment(envName)
+
+	// 获取所有pod
+	serviceList, err := GetServiceList(*environment)
+	if err != nil {
+		fmt.Printf("获取服务列表失败: %v\n", err)
+		return
+	}
+
+	var servicesDBList []Service
+	for _, service := range serviceList {
+		for _, port := range service.Ports {
+			workloadId := ""
+			if len(service.TargetWorkloadIds) == 1 {
+				parts := strings.Split(service.TargetWorkloadIds[0], ":")
+				workloadId = parts[len(parts)-1] // 获取最后一个元素
+			}
+			servicesDBList = append(servicesDBList, Service{
+				Environment:  envName,
+				ProjectId:    service.ProjectId,
+				NamespaceId:  service.NamespaceId,
+				Name:         service.Name,
+				WorkloadId:   workloadId,
+				Kind:         service.Kind,
+				PortName:     port.Name,
+				PortProtocol: port.Protocol,
+				Port:         port.Port,
+				TargetPort:   port.TargetPort,
+				NodePort:     port.NodePort,
+			})
+		}
+	}
+
+	// 插入新的pod数据
+	if err := db.InsertServices(servicesDBList); err != nil {
+		fmt.Printf("插入服务数据失败: %v\n", err)
+		return
 	}
 }
 

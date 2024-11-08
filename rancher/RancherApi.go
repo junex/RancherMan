@@ -12,20 +12,16 @@ import (
 )
 
 type WorkloadResp struct {
-	Name            string
-	NamespaceID     string
-	Containers      []Container
-	PublicEndpoints []Endpoint
+	Name        string
+	NamespaceID string
+	ProjectID   string
+	Containers  []Container
 }
 
 type Container struct {
 	Image           string
 	ImagePullPolicy string
 	Environment     map[string]string
-}
-
-type Endpoint struct {
-	Port int
 }
 
 type NamespaceResp struct {
@@ -39,6 +35,23 @@ type PodResp struct {
 	NamespaceId string
 	WorkloadId  string
 	State       string
+}
+
+type ServiceResp struct {
+	ProjectId         string
+	NamespaceId       string
+	Name              string
+	TargetWorkloadIds []string
+	Kind              string
+	Ports             []PortResp
+}
+
+type PortResp struct {
+	Name       string
+	Protocol   string
+	Port       int
+	TargetPort int
+	NodePort   int
 }
 
 func makeProjectRequest(environment Environment, method, url string, payload []byte) (*http.Response, error) {
@@ -234,4 +247,22 @@ func ImportYaml(environment Environment, defaultNamespace string, yaml []byte) e
 	}
 	defer response.Body.Close()
 	return nil
+}
+
+func GetServiceList(environment Environment) ([]ServiceResp, error) {
+	resp, err := makeProjectRequest(environment, "GET", "services?limit=-1", nil)
+	if err != nil {
+		log.Printf("Error fetching services: %v", err)
+		return nil, err
+	}
+
+	var servicesResponse struct {
+		Data []ServiceResp `json:"data"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&servicesResponse); err != nil {
+		log.Printf("Error decoding services: %v", err)
+		return nil, err
+	}
+	resp.Body.Close()
+	return servicesResponse.Data, nil
 }
