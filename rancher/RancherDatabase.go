@@ -409,10 +409,10 @@ func (dm *DatabaseManager) GetUploadConfigsByImageLikeSpecial2(image string) ([]
 }
 
 // GetServicesByWorkload 根据环境、项目ID、命名空间ID和工作负载ID查询服务列表
-func (dm *DatabaseManager) GetServicesByWorkload(environment, projectId, namespaceId, workloadId string, kind string) ([]Service, error) {
+func (dm *DatabaseManager) GetServicesByWorkload(environment, projectId, namespaceId, workloadId string) ([]Service, error) {
 	var services []Service
-	result := dm.db.Where("environment = ? AND project_id = ? AND namespace_id = ? AND workload_id = ? AND kind = ?",
-		environment, projectId, namespaceId, workloadId, kind).Find(&services)
+	result := dm.db.Where("environment = ? AND project_id = ? AND namespace_id = ? AND workload_id = ?",
+		environment, projectId, namespaceId, workloadId).Find(&services)
 	return services, result.Error
 }
 

@@ -538,12 +538,16 @@ func updateInfoAreaForSingleWorkload() {
 			}
 		}
 	}
-	services, err := gDb.GetServicesByWorkload(workload.Environment, workload.ProjectId, workload.Namespace, workload.Name, "NodePort")
+	services, err := gDb.GetServicesByWorkload(workload.Environment, workload.ProjectId, workload.Namespace, workload.Name)
 	if err == nil && len(services) > 0 {
 		info.WriteString("端口访问:\n")
 		ip := gEnvironment.Ip
 		for _, port := range services {
-			info.WriteString(fmt.Sprintf("  %s    %s    %d->%s:%d\n", port.PortName, port.PortProtocol, port.Port, ip, port.NodePort))
+			if port.Kind == "NodePort" {
+				info.WriteString(fmt.Sprintf("  %s    %s    %d->%s:%d\n", port.PortName, port.PortProtocol, port.Port, ip, port.NodePort))
+			} else {
+				info.WriteString(fmt.Sprintf("  %s    %s    %d\n", port.PortName, port.PortProtocol, port.Port))
+			}
 		}
 	}
 	// 只有当 AccessPath 不为空时才显示，并按逗号分隔成多行
