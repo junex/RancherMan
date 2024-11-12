@@ -11,7 +11,7 @@ import (
 )
 
 // 添加新的函数来创建和显示自定义对话框
-func ShowSelectNamespaceDialog(window fyne.Window, db *rancher.DatabaseManager, onSelect func(namespace rancher.Namespace)) {
+func ShowSelectNamespaceDialog(window fyne.Window, db *rancher.DatabaseManager, needNewTag bool, onSelect func(namespace rancher.Namespace, tag string)) {
 	// 创建搜索框
 	searchEntry := widget.NewEntry()
 	searchEntry.SetPlaceHolder("搜索命名空间...")
@@ -56,14 +56,29 @@ func ShowSelectNamespaceDialog(window fyne.Window, db *rancher.DatabaseManager, 
 		}
 	}
 
-	// 创建对话框内容
-	content := container.NewBorder(
-		searchEntry, // 顶部放置搜索框
-		nil,
-		nil,
-		nil,
-		list, // 中间区域放置列表
-	)
+	// 创建tag输入框（仅当needNewTag为true时）
+	var tagEntry *widget.Entry
+	var content *fyne.Container
+	if needNewTag {
+		tagEntry = widget.NewEntry()
+		tagEntry.SetPlaceHolder("输入新的tag...")
+
+		content = container.NewBorder(
+			searchEntry, // 顶部放置搜索框
+			tagEntry,    // 底部放置tag输入框
+			nil,
+			nil,
+			list, // 中间区域放置列表
+		)
+	} else {
+		content = container.NewBorder(
+			searchEntry, // 顶部放置搜索框
+			nil,         // 不需要tag输入框
+			nil,
+			nil,
+			list, // 中间区域放置列表
+		)
+	}
 
 	// 创建对话框
 	dialog := dialog.NewCustom("选择目标命名空间", "取消",
@@ -71,16 +86,26 @@ func ShowSelectNamespaceDialog(window fyne.Window, db *rancher.DatabaseManager, 
 		window,
 	)
 
-	searchEntry.OnSubmitted = func(text string) {
+	submitFunc := func(text string) {
 		dialog.Hide()
-		onSelect(selectedNamespace)
+		var tagText string
+		if tagEntry != nil {
+			tagText = tagEntry.Text
+		}
+		onSelect(selectedNamespace, tagText)
 	}
+	searchEntry.OnSubmitted = submitFunc
+	tagEntry.OnSubmitted = submitFunc
 
 	// 添加确定按钮
 	dialog.SetButtons([]fyne.CanvasObject{
 		widget.NewButton("确定", func() {
 			dialog.Hide()
-			onSelect(selectedNamespace)
+			var tagText string
+			if tagEntry != nil {
+				tagText = tagEntry.Text
+			}
+			onSelect(selectedNamespace, tagText)
 		}),
 		widget.NewButton("取消", func() {
 			dialog.Hide()

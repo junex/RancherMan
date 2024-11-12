@@ -42,6 +42,7 @@ var gDb *rancher.DatabaseManager
 var gConfig map[string]interface{}
 var gEnvironment *rancher.Environment
 var gJumpHostConfig *rancher.JumpHostConfig
+var gCloneIgnoreTagWorkload []string
 
 func main() {
 	//// 创建数据库管理器实例
@@ -152,23 +153,23 @@ func initView() fyne.Window {
 		),
 		fyne.NewMenu("克隆和导出",
 			fyne.NewMenuItem("导出configMap", func() {
-				ui.ShowSelectNamespaceDialog(myWindow, gDb, func(destNamespace rancher.Namespace) {
+				ui.ShowSelectNamespaceDialog(myWindow, gDb, false, func(destNamespace rancher.Namespace, tag string) {
 					cloneOrExportConfigMap(false, destNamespace)
 				})
 			}),
 			fyne.NewMenuItem("克隆configMap", func() {
-				ui.ShowSelectNamespaceDialog(myWindow, gDb, func(destNamespace rancher.Namespace) {
+				ui.ShowSelectNamespaceDialog(myWindow, gDb, false, func(destNamespace rancher.Namespace, tag string) {
 					cloneOrExportConfigMap(false, destNamespace)
 				})
 			}),
 			fyne.NewMenuItem("导出workload", func() {
-				ui.ShowSelectNamespaceDialog(myWindow, gDb, func(destNamespace rancher.Namespace) {
-					cloneOrExportWorkload(false, destNamespace)
+				ui.ShowSelectNamespaceDialog(myWindow, gDb, true, func(destNamespace rancher.Namespace, tag string) {
+					cloneOrExportWorkload(false, destNamespace, tag)
 				})
 			}),
 			fyne.NewMenuItem("克隆workload", func() {
-				ui.ShowSelectNamespaceDialog(myWindow, gDb, func(destNamespace rancher.Namespace) {
-					cloneOrExportWorkload(true, destNamespace)
+				ui.ShowSelectNamespaceDialog(myWindow, gDb, true, func(destNamespace rancher.Namespace, tag string) {
+					cloneOrExportWorkload(true, destNamespace, tag)
 				})
 			}),
 		),
@@ -435,6 +436,13 @@ func loadConfig(showSuccessTip bool) {
 			RootPath: jumpHost["root_path"].(string),
 		}
 	}
+	// 解析 clone_ignore_tag_workload
+	if ignoreList, exists := gConfig["clone_ignore_tag_workload"].([]interface{}); exists {
+		gCloneIgnoreTagWorkload = make([]string, len(ignoreList))
+		for i, item := range ignoreList {
+			gCloneIgnoreTagWorkload[i] = item.(string)
+		}
+	}
 	if err != nil {
 		gInfoArea.SetText(fmt.Sprintf("从数据库读取配置时出错: %v", err))
 	} else {
@@ -680,7 +688,7 @@ func filterWorkloads(items []rancher.Workload, filter string) []rancher.Workload
 	return filtered
 }
 
-func cloneOrExportWorkload(isClone bool, destNamespace rancher.Namespace) {
+func cloneOrExportWorkload(isClone bool, destNamespace rancher.Namespace, tag string) {
 	if isClone && destNamespace.Name == "" {
 		gInfoArea.SetText("未选择目标命名空间")
 		return
@@ -699,6 +707,25 @@ func cloneOrExportWorkload(isClone bool, destNamespace rancher.Namespace) {
 				if destNamespace.Name != "" {
 					deployment = strings.ReplaceAll(deployment, fmt.Sprintf(":\"%s:", workload.Namespace), fmt.Sprintf(":\"%s:", destNamespace.Name))
 					deployment = strings.ReplaceAll(deployment, fmt.Sprintf("deployment-%s-", workload.Namespace), fmt.Sprintf("deployment-%s-", destNamespace.Name))
+				}
+				if tag != "" {
+					// 检查workload是否在忽略列表中
+					shouldUpdateTag := true
+					for _, ignoreName := range gCloneIgnoreTagWorkload {
+						if strings.Contains(workload.Name, ignoreName) {
+							shouldUpdateTag = false
+							break
+						}
+					}
+					if shouldUpdateTag {
+						// 从原始镜像名称中分离基础名称和标签
+						baseImage := workload.Image
+						if colonIndex := strings.LastIndex(workload.Image, ":"); colonIndex > 0 {
+							baseImage = workload.Image[:colonIndex]
+						}
+						// 使用新标签替换
+						deployment = strings.ReplaceAll(deployment, fmt.Sprintf("image: %s", workload.Image), fmt.Sprintf("image: %s:%s", baseImage, tag))
+					}
 				}
 				// 解析yaml
 				var deploymentStruct workload2.Deployment
