@@ -95,7 +95,9 @@ func ShowSelectNamespaceDialog(window fyne.Window, db *rancher.DatabaseManager, 
 		onSelect(selectedNamespace, tagText)
 	}
 	searchEntry.OnSubmitted = submitFunc
-	tagEntry.OnSubmitted = submitFunc
+	if needNewTag {
+		tagEntry.OnSubmitted = submitFunc
+	}
 
 	// 添加确定按钮
 	dialog.SetButtons([]fyne.CanvasObject{

@@ -307,6 +307,7 @@ func initView() fyne.Window {
 			gInfoArea.SetText(info.String())
 			rancher.UpdatePod(gDb, gEnvironment.ID, gEnvironment)
 			info.WriteString("完成!\n")
+			gInfoArea.SetText(info.String())
 		} else {
 			// 如果没有选中环境，则更新所有环境
 			for envName, _ := range gConfig["environment"].(map[interface{}]interface{}) {
@@ -315,9 +316,9 @@ func initView() fyne.Window {
 				gInfoArea.SetText(info.String())
 				rancher.UpdateEnvironment(gDb, environment.ID, environment, false)
 				info.WriteString("完成!\n")
+				gInfoArea.SetText(info.String())
 			}
 		}
-		gInfoArea.SetText(info.String())
 		updateInfoArea()
 	})
 
@@ -333,6 +334,7 @@ func initView() fyne.Window {
 				} else {
 					info.WriteString("失败!\n")
 				}
+				gInfoArea.SetText(info.String())
 			}
 		} else if len(gFilteredWorkloads) > 0 {
 			// 处理未选择的情况，使用过滤列表中的所有数据
@@ -344,9 +346,9 @@ func initView() fyne.Window {
 				} else {
 					info.WriteString("失败!\n")
 				}
+				gInfoArea.SetText(info.String())
 			}
 		}
-		gInfoArea.SetText(info.String())
 	})
 	buttonClose := widget.NewButton("关闭", func() {
 		var info strings.Builder
@@ -360,6 +362,7 @@ func initView() fyne.Window {
 				} else {
 					info.WriteString("失败!\n")
 				}
+				gInfoArea.SetText(info.String())
 			}
 		} else if len(gFilteredWorkloads) > 0 {
 			// 处理未选择的情况，使用过滤列表中的所有数据
@@ -372,6 +375,7 @@ func initView() fyne.Window {
 					info.WriteString("失败!\n")
 				}
 			}
+			gInfoArea.SetText(info.String())
 		}
 		gInfoArea.SetText(info.String())
 	})
