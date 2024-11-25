@@ -374,10 +374,9 @@ func initView() fyne.Window {
 				} else {
 					info.WriteString("失败!\n")
 				}
+				gInfoArea.SetText(info.String())
 			}
-			gInfoArea.SetText(info.String())
 		}
-		gInfoArea.SetText(info.String())
 	})
 	buttonRedeploy := widget.NewButton("重新部署", func() {
 		var info strings.Builder
@@ -391,6 +390,7 @@ func initView() fyne.Window {
 				} else {
 					info.WriteString("失败!\n")
 				}
+				gInfoArea.SetText(info.String())
 			}
 		} else if len(gFilteredWorkloads) > 0 {
 			// 处理未选择的情况，使用过滤列表中的所有数据
@@ -402,9 +402,9 @@ func initView() fyne.Window {
 				} else {
 					info.WriteString("失败!\n")
 				}
+				gInfoArea.SetText(info.String())
 			}
 		}
-		gInfoArea.SetText(info.String())
 	})
 
 	// 更新布局（移除了buttonUpdateData）
@@ -541,12 +541,21 @@ func updateInfoAreaForSingleWorkload() {
 		}
 		info.WriteString(fmt.Sprintf("Pod状态: %s\n", strings.Join(states, ",")))
 	}
-	// 如果工作负载名称包含mysql，尝试获取MySQL root密码
-	if strings.Contains(strings.ToLower(workload.Name), "mysql") && workload.ContainerEnvironment != "" {
+	// 检查数据库相关的环境变量
+	if (strings.Contains(strings.ToLower(workload.Name), "mysql") ||
+		strings.Contains(strings.ToLower(workload.Name), "mongo")) &&
+		workload.ContainerEnvironment != "" {
 		var envVars map[string]string
 		if err := json.Unmarshal([]byte(workload.ContainerEnvironment), &envVars); err == nil {
-			if rootPassword, exists := envVars["MYSQL_ROOT_PASSWORD"]; exists {
-				info.WriteString(fmt.Sprintf("MySQL Root密码: %s\n", rootPassword))
+			// 检查并输出每个可能存在的环境变量
+			if password, exists := envVars["MYSQL_ROOT_PASSWORD"]; exists {
+				info.WriteString(fmt.Sprintf("MySQL Root密码: %s\n", password))
+			}
+			if username, exists := envVars["MONGO_INITDB_ROOT_USERNAME"]; exists {
+				info.WriteString(fmt.Sprintf("MongoDB初始化Root用户名: %s\n", username))
+			}
+			if password, exists := envVars["MONGO_INITDB_ROOT_PASSWORD"]; exists {
+				info.WriteString(fmt.Sprintf("MongoDB初始化Root密码: %s\n", password))
 			}
 		}
 	}
