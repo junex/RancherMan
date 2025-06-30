@@ -3,6 +3,7 @@ package rancher
 import (
 	"fmt"
 	"path/filepath"
+	"regexp"
 	"strings"
 
 	"golang.org/x/crypto/ssh"
@@ -46,6 +47,90 @@ func connectToJumpHost(config *JumpHostConfig) (*ssh.Client, error) {
 	}
 
 	return client, nil
+}
+
+// 提取镜像名称的函数，支持多种脚本格式
+func extractImageName(shContent string, dirName string) string {
+	lines := strings.Split(shContent, "\n")
+
+	// 方法1: 查找直接的 docker push 命令
+	for _, line := range lines {
+		if strings.Contains(line, "docker push") {
+			parts := strings.Fields(line)
+			if len(parts) > 2 {
+				return parts[2]
+			}
+		}
+	}
+
+	// 方法2: 解析使用变量的脚本格式
+	var imageNameVar string
+	var harborRegistry string
+	var namespace string
+
+	// 查找 image_name 变量定义
+	imageNameRegex := regexp.MustCompile(`image_name\s*=\s*\x60basename\s+\\\x60pwd\\\x60\x60`)
+	for _, line := range lines {
+		if imageNameRegex.MatchString(line) {
+			imageNameVar = dirName // 使用目录名作为镜像名
+			break
+		}
+	}
+
+	// 如果没找到 image_name 变量，尝试其他可能的定义方式
+	if imageNameVar == "" {
+		imageNameRegex2 := regexp.MustCompile(`image_name\s*=.*`)
+		for _, line := range lines {
+			if imageNameRegex2.MatchString(line) {
+				// 这里可以根据实际情况解析其他定义方式
+				imageNameVar = dirName
+				break
+			}
+		}
+	}
+
+	// 解析 harbor 仓库地址和命名空间
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+
+		// 查找包含 harbor 地址的行
+		if strings.Contains(line, "harbor.yunjingtech.cn:30002") {
+			// 提取仓库地址
+			if harborRegistry == "" {
+				harborRegistry = "harbor.yunjingtech.cn:30002"
+			}
+
+			// 解析命名空间
+			if strings.Contains(line, "docker build") || strings.Contains(line, "docker push") {
+				// 匹配模式如: harbor.yunjingtech.cn:30002/$2/$image_name:$1
+				// 或: harbor.yunjingtech.cn:30002/dev-images/$image_name:$1
+
+				if strings.Contains(line, "/$2/") {
+					// 使用参数作为命名空间，默认使用 dev-images
+					namespace = "dev-images"
+				} else if strings.Contains(line, "/dev-images/") {
+					namespace = "dev-images"
+				}
+
+				// 如果找到了必要的信息，构建完整的镜像名称
+				if imageNameVar != "" && harborRegistry != "" && namespace != "" {
+					// 返回默认的镜像名称格式 (使用 latest 作为默认标签)
+					return fmt.Sprintf("%s/%s/%s:latest", harborRegistry, namespace, imageNameVar)
+				}
+			}
+		}
+	}
+
+	// 方法3: 如果以上都失败，尝试更宽泛的匹配
+	for _, line := range lines {
+		// 查找任何包含镜像仓库模式的行
+		harbormatch := regexp.MustCompile(`harbor\.[^/]+/[^/]+/[^:\s]+`)
+		if matches := harbormatch.FindStringSubmatch(line); len(matches) > 0 {
+			return matches[0] + ":latest"
+		}
+	}
+
+	return ""
 }
 
 func ListUploadConfig(jumpHostConfig *JumpHostConfig, batchSize int, listener ProgressListener) {
@@ -93,9 +178,6 @@ func ListUploadConfig(jumpHostConfig *JumpHostConfig, batchSize int, listener Pr
 		fmt.Println("命令执行成功但没有输出")
 		return
 	}
-
-	// 打印原始输出以便调试
-	//fmt.Printf("命令原始输出:\n%s\n", string(output))
 
 	// 解析输出,按目录分组文件
 	files := make(map[string][]string)
@@ -176,18 +258,18 @@ func ListUploadConfig(jumpHostConfig *JumpHostConfig, batchSize int, listener Pr
 				shContent, _ := session.Output(shCmd)
 				session.Close()
 
-				// 提取镜像名称
-				var imageName string
-				for _, line := range strings.Split(string(shContent), "\n") {
-					if strings.Contains(line, "docker push") {
-						parts := strings.Fields(line)
-						// 获取docker push后面的第一个参数作为镜像名称
-						if len(parts) > 2 {
-							imageName = parts[2]
-							break
-						}
+				// 获取目录名称，用于解析镜像名称
+				dirName := filepath.Base(strings.TrimPrefix(dir, "./"))
+				if dirName == "." {
+					// 如果是根目录，尝试从完整路径获取最后一个目录名
+					pathParts := strings.Split(strings.TrimPrefix(dir, "./"), "/")
+					if len(pathParts) > 0 && pathParts[len(pathParts)-1] != "" {
+						dirName = pathParts[len(pathParts)-1]
 					}
 				}
+
+				// 使用增强的镜像名称提取函数
+				imageName := extractImageName(string(shContent), dirName)
 
 				if jarName != "" && imageName != "" {
 					configs = append(configs, SSHUploadConfig{
