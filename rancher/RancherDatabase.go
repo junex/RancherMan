@@ -404,7 +404,8 @@ func (dm *DatabaseManager) GetUploadConfigsByImageLikeSpecial1(image string) ([]
 // GetUploadConfigsByImageLikeSpecial2 根据镜像名称模糊查询上传配置
 func (dm *DatabaseManager) GetUploadConfigsByImageLikeSpecial2(image string) ([]UploadConfig, error) {
 	var configs []UploadConfig
-	result := dm.db.Where("image LIKE ?", "%/$%/"+image+":$%").Find(&configs)
+	result := dm.db.Where("image LIKE ?", "%/$%/"+image+":$%").Or("(image LIKE ? AND dir LIKE ?)", "%/$%/$image_name:$%", "%"+image).
+		Find(&configs)
 	return configs, result.Error
 }
 

@@ -609,17 +609,22 @@ func updateInfoAreaForSingleWorkload() {
 	uploadConfigList = append(uploadConfigList, configs2...)
 	// 对uploadConfigList进行排序
 	sort.Slice(uploadConfigList, func(i, j int) bool {
+		// 优先条件：Image包含"$image_name"排前面
+		containsImageNameI := strings.Contains(uploadConfigList[i].Image, "$image_name")
+		containsImageNameJ := strings.Contains(uploadConfigList[j].Image, "$image_name")
+
+		if containsImageNameI != containsImageNameJ {
+			// 谁包含谁在前
+			return containsImageNameI
+		}
+
+		// 如果两边都包含或都不包含，继续后续逻辑
 		// 获取$符号数量
 		dollarCountI := strings.Count(uploadConfigList[i].Image, "$")
 		dollarCountJ := strings.Count(uploadConfigList[j].Image, "$")
 
 		// 如果$数量不同,按数量升序排序
 		if dollarCountI != dollarCountJ {
-			containsCustomI := strings.Contains(uploadConfigList[i].Script, "-custom")
-			containsCustomJ := strings.Contains(uploadConfigList[j].Script, "-custom")
-			if containsCustomI != containsCustomJ {
-				return !containsCustomI
-			}
 			return dollarCountI < dollarCountJ
 		}
 
@@ -631,11 +636,6 @@ func updateInfoAreaForSingleWorkload() {
 			containsI := strings.Contains(uploadConfigList[i].Dir, middlePart)
 			containsJ := strings.Contains(uploadConfigList[j].Dir, middlePart)
 
-			containsCustomI := strings.Contains(uploadConfigList[i].Script, "-custom")
-			containsCustomJ := strings.Contains(uploadConfigList[j].Script, "-custom")
-			if containsCustomI != containsCustomJ {
-				return !containsCustomI
-			}
 			// 包含middlePart的排在前面
 			if containsI != containsJ {
 				return containsI
@@ -652,9 +652,12 @@ func updateInfoAreaForSingleWorkload() {
 			info.WriteString(fmt.Sprintf("  目录: %s\n", strings.ReplaceAll(config.Dir, "\\", "/")))
 			if config.Script != "" {
 				var script = config.Script
-				if strings.Count(config.Image, "$") == 1 {
+				dollarCount := strings.Count(config.Image, "$")
+				if dollarCount == 1 {
 					script = script + " " + tag
-				} else if strings.Count(config.Image, "$") == 2 {
+				} else if dollarCount == 2 {
+					script = script + " " + tag + " " + imageDir
+				} else if dollarCount == 3 && strings.Contains(config.Image, "$image_name") {
 					script = script + " " + tag + " " + imageDir
 				}
 				info.WriteString(fmt.Sprintf("  脚本: ./%s\n", script))
