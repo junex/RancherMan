@@ -615,6 +615,11 @@ func updateInfoAreaForSingleWorkload() {
 
 		// 如果$数量不同,按数量升序排序
 		if dollarCountI != dollarCountJ {
+			containsCustomI := strings.Contains(uploadConfigList[i].Script, "-custom")
+			containsCustomJ := strings.Contains(uploadConfigList[j].Script, "-custom")
+			if containsCustomI != containsCustomJ {
+				return !containsCustomI
+			}
 			return dollarCountI < dollarCountJ
 		}
 
@@ -626,6 +631,11 @@ func updateInfoAreaForSingleWorkload() {
 			containsI := strings.Contains(uploadConfigList[i].Dir, middlePart)
 			containsJ := strings.Contains(uploadConfigList[j].Dir, middlePart)
 
+			containsCustomI := strings.Contains(uploadConfigList[i].Script, "-custom")
+			containsCustomJ := strings.Contains(uploadConfigList[j].Script, "-custom")
+			if containsCustomI != containsCustomJ {
+				return !containsCustomI
+			}
 			// 包含middlePart的排在前面
 			if containsI != containsJ {
 				return containsI

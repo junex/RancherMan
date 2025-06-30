@@ -53,20 +53,8 @@ func connectToJumpHost(config *JumpHostConfig) (*ssh.Client, error) {
 func extractImageName(shContent string, dirName string) string {
 	lines := strings.Split(shContent, "\n")
 
-	// 方法1: 查找直接的 docker push 命令
-	for _, line := range lines {
-		if strings.Contains(line, "docker push") {
-			parts := strings.Fields(line)
-			if len(parts) > 2 {
-				return parts[2]
-			}
-		}
-	}
-
 	// 方法2: 解析使用变量的脚本格式
 	var imageNameVar string
-	var harborRegistry string
-	var namespace string
 
 	// 查找 image_name 变量定义
 	imageNameRegex := regexp.MustCompile(`image_name\s*=\s*\x60basename\s+\\\x60pwd\\\x60\x60`)
@@ -82,51 +70,53 @@ func extractImageName(shContent string, dirName string) string {
 		imageNameRegex2 := regexp.MustCompile(`image_name\s*=.*`)
 		for _, line := range lines {
 			if imageNameRegex2.MatchString(line) {
-				// 这里可以根据实际情况解析其他定义方式
 				imageNameVar = dirName
 				break
 			}
 		}
 	}
 
-	// 解析 harbor 仓库地址和命名空间
-	for _, line := range lines {
-		line = strings.TrimSpace(line)
+	// 解析包含harbor地址的docker命令行，保留原始参数变量
+	if imageNameVar != "" {
+		for _, line := range lines {
+			line = strings.TrimSpace(line)
 
-		// 查找包含 harbor 地址的行
-		if strings.Contains(line, "harbor.yunjingtech.cn:30002") {
-			// 提取仓库地址
-			if harborRegistry == "" {
-				harborRegistry = "harbor.yunjingtech.cn:30002"
-			}
+			// 查找包含 harbor 地址的 docker build 或 docker push 行
+			if strings.Contains(line, "harbor.yunjingtech.cn:30002") &&
+				(strings.Contains(line, "docker build") || strings.Contains(line, "docker push")) {
 
-			// 解析命名空间
-			if strings.Contains(line, "docker build") || strings.Contains(line, "docker push") {
-				// 匹配模式如: harbor.yunjingtech.cn:30002/$2/$image_name:$1
-				// 或: harbor.yunjingtech.cn:30002/dev-images/$image_name:$1
+				result := strings.ReplaceAll(line, "$image_name", imageNameVar)
 
-				if strings.Contains(line, "/$2/") {
-					// 使用参数作为命名空间，默认使用 dev-images
-					namespace = "dev-images"
-				} else if strings.Contains(line, "/dev-images/") {
-					namespace = "dev-images"
+				// 从处理后的行中提取镜像地址部分
+				// 查找 -t 参数后面的镜像地址
+				if strings.Contains(result, " -t ") {
+					parts := strings.Fields(result)
+					for i, part := range parts {
+						if part == "-t" && i+1 < len(parts) {
+							return parts[i+1]
+						}
+					}
 				}
 
-				// 如果找到了必要的信息，构建完整的镜像名称
-				if imageNameVar != "" && harborRegistry != "" && namespace != "" {
-					// 返回默认的镜像名称格式 (使用 latest 作为默认标签)
-					return fmt.Sprintf("%s/%s/%s:latest", harborRegistry, namespace, imageNameVar)
+				// 如果没有 -t 参数，查找 docker push 后面的镜像地址
+				if strings.Contains(result, "docker push") {
+					parts := strings.Fields(result)
+					for i, part := range parts {
+						if part == "push" && i+1 < len(parts) {
+							return parts[i+1]
+						}
+					}
 				}
 			}
 		}
 	}
-
-	// 方法3: 如果以上都失败，尝试更宽泛的匹配
+	// 方法1: 查找直接的 docker push 命令
 	for _, line := range lines {
-		// 查找任何包含镜像仓库模式的行
-		harbormatch := regexp.MustCompile(`harbor\.[^/]+/[^/]+/[^:\s]+`)
-		if matches := harbormatch.FindStringSubmatch(line); len(matches) > 0 {
-			return matches[0] + ":latest"
+		if strings.Contains(line, "docker push") {
+			parts := strings.Fields(line)
+			if len(parts) > 2 {
+				return parts[2]
+			}
 		}
 	}
 
