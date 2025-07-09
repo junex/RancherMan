@@ -19,9 +19,11 @@ type WorkloadResp struct {
 }
 
 type Container struct {
+	Name            string
 	Image           string
 	ImagePullPolicy string
 	Environment     map[string]string
+	Command         []string
 }
 
 type NamespaceResp struct {

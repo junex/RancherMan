@@ -559,6 +559,10 @@ func updateInfoAreaForSingleWorkload() {
 			}
 		}
 	}
+	// 检查是否有备注，有就展示
+	if strings.TrimSpace(workload.Remark) != "" {
+		info.WriteString(fmt.Sprintf("备注: \n%s\n", workload.Remark))
+	}
 	services, err := gDb.GetServicesByWorkload(workload.Environment, workload.ProjectId, workload.Namespace, workload.Name)
 	if err == nil && len(services) > 0 {
 		info.WriteString("端口访问:\n")

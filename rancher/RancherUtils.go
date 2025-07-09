@@ -88,14 +88,22 @@ func UpdateEnvironment(db *DatabaseManager, envName string, environment *Environ
 
 		var workloadsDBList []Workload
 		for _, workload := range workloadList {
-			var image, imagePullPolicy, containerEnvironment string
-			if len(workload.Containers) >= 1 {
-				image = workload.Containers[0].Image
-				imagePullPolicy = workload.Containers[0].ImagePullPolicy
-				if envData, err := json.Marshal(workload.Containers[0].Environment); err == nil {
-					containerEnvironment = string(envData)
+			var image, imagePullPolicy, containerEnvironment, remark string
+			for _, container := range workload.Containers {
+				// 只取第一个容器的信息
+				if image == "" && imagePullPolicy == "" && containerEnvironment == "" {
+					image = container.Image
+					imagePullPolicy = container.ImagePullPolicy
+					if envData, err := json.Marshal(container.Environment); err == nil {
+						containerEnvironment = string(envData)
+					}
+				}
+				// 如果容器名为 "sftp"，检查 Command 并赋值给 remark
+				if container.Name == "sftp" && len(container.Command) > 0 {
+					remark = "sftp账号密码: " + container.Command[0]
 				}
 			}
+
 			accessPath := LookupService(lookupDict, workload.Name, workload.NamespaceID)
 			workloadsDBList = append(workloadsDBList, Workload{
 				Environment:          envName,
@@ -106,6 +114,7 @@ func UpdateEnvironment(db *DatabaseManager, envName string, environment *Environ
 				ImagePullPolicy:      imagePullPolicy,
 				ContainerEnvironment: containerEnvironment,
 				AccessPath:           accessPath,
+				Remark:               remark,
 			})
 		}
 		db.InsertWorkloads(workloadsDBList)

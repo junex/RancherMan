@@ -20,6 +20,7 @@ type Workload struct {
 	ImagePullPolicy      string `gorm:"size:20"`
 	ContainerEnvironment string `gorm:"size:255"`
 	AccessPath           string `gorm:"size:500"`
+	Remark               string `gorm:"size:500"`
 }
 
 func (Workload) TableName() string {
