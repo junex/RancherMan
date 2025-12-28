@@ -27,6 +27,7 @@ func updateInfoAreaForSelectNamespace() {
 	podList, _ := gDb.GetPodsByEnvNamespace(gSelectedNamespace.Environment, gSelectedNamespace.Name)
 
 	var info strings.Builder
+	// todo 修复gEnvironment偶尔为null导致闪退
 	info.WriteString(fmt.Sprintf("环境: %s\n", gEnvironment.Name))
 	info.WriteString(fmt.Sprintf("命名空间: %s\n", gSelectedNamespace.Name))
 	info.WriteString(fmt.Sprintf("项目: %s\n", gSelectedNamespace.Project))

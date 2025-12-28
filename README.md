@@ -127,6 +127,11 @@ fyne package --help
 -release: 创建发布版本
 -sourceDir: 指定源代码目录
 
+### todo
+1. 修复gEnvironment有时为null的问题，这个会导致崩溃
+2. 更新数据或者删除数据，或者更新跳板机后，异步执行成功后，应更新界面信息
+3. 更新pod走websocket
+4. 执行命令行
 
 ## 许可证
 
