@@ -3,7 +3,6 @@ package ui
 import (
 	"fmt"
 	"log"
-	"strings"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/app"
@@ -38,90 +37,59 @@ func InitView() fyne.Window {
 		),
 		fyne.NewMenu("数据",
 			fyne.NewMenuItem("更新数据", func() {
-				var info strings.Builder
 				env := operations.GetEnvironment()
-				config := operations.GetConfig()
 				db := operations.GetDb()
-				infoArea := operations.GetInfoArea()
+				taskQueue := operations.GetTaskQueue()
 
 				if env != nil {
 					// 只更新当前选中的环境
-					info.WriteString(fmt.Sprintf("更新数据: %s ", env.Name))
-					infoArea.SetText(info.String())
-					rancher.UpdateEnvironment(db, env.ID, env, true)
-					info.WriteString("完成!\n")
-					infoArea.SetText(info.String())
+					operations.UpdateDataTask(env, db, taskQueue)
 				} else {
 					// 如果没有选中环境，则更新所有环境
+					config := operations.GetConfig()
 					for envName, _ := range config["environment"].(map[interface{}]interface{}) {
 						environment, _ := rancher.GetEnvironmentFromConfig(config, envName.(string))
-						info.WriteString(fmt.Sprintf("更新数据: %s ", environment.Name))
-						infoArea.SetText(info.String())
-						rancher.UpdateEnvironment(db, environment.ID, environment, true)
-						info.WriteString("完成!\n")
-						infoArea.SetText(info.String())
+						operations.UpdateDataTask(environment, db, taskQueue)
 					}
 				}
 				operations.InitData()
 			}),
 			fyne.NewMenuItem("更新端口映射", func() {
-				var info strings.Builder
 				env := operations.GetEnvironment()
-				config := operations.GetConfig()
 				db := operations.GetDb()
-				infoArea := operations.GetInfoArea()
+				taskQueue := operations.GetTaskQueue()
 
 				if env != nil {
 					// 只更新当前选中的环境
-					info.WriteString(fmt.Sprintf("更新端口映射: %s ", env.Name))
-					infoArea.SetText(info.String())
-					rancher.UpdateService(db, env.ID, env)
-					info.WriteString("完成!\n")
-					infoArea.SetText(info.String())
+					operations.UpdatePortMapTask(env, db, taskQueue)
 				} else {
 					// 如果没有选中环境，则更新所有环境
+					config := operations.GetConfig()
 					for envName, _ := range config["environment"].(map[interface{}]interface{}) {
 						environment, _ := rancher.GetEnvironmentFromConfig(config, envName.(string))
-						info.WriteString(fmt.Sprintf("更新端口映射: %s ", environment.Name))
-						infoArea.SetText(info.String())
-						rancher.UpdateService(db, environment.ID, environment)
-						info.WriteString("完成!\n")
-						infoArea.SetText(info.String())
+						operations.UpdatePortMapTask(environment, db, taskQueue)
 					}
 				}
 			}),
 			fyne.NewMenuItem("更新跳板机", func() {
 				jumpHostConfig := operations.GetJumpHostConfig()
 				db := operations.GetDb()
-				infoArea := operations.GetInfoArea()
+				taskQueue := operations.GetTaskQueue()
 
 				if jumpHostConfig == nil {
-					infoArea.SetText("错误：未配置跳板机信息")
+					operations.GetInfoArea().SetText("错误：未配置跳板机信息")
 					return
 				}
 
-				// 创建进度监听器
-				listener := operations.NewJumpHostProgressListener(infoArea)
-
-				// 清空信息区域并显示初始信息
-				infoArea.SetText("开始扫描跳板机配置...\n")
-
-				// 在新的 goroutine 中执行耗时操作
-				go func() {
-					db.DeleteAllUploadConfigs()
-					rancher.ListUploadConfig(jumpHostConfig, 50, listener)
-				}()
+				// 按顺序创建并执行三个跳板机任务
+				operations.ScanJumpHostTask(db, taskQueue)
+				operations.GetJumpHostInfoTask(db, taskQueue)
+				operations.UpdateJumpHostDBTask(db, taskQueue)
 			}),
 			fyne.NewMenuItem("清空数据", func() {
 				db := operations.GetDb()
-				infoArea := operations.GetInfoArea()
-				err := db.ClearAllData()
-				if err != nil {
-					infoArea.SetText(fmt.Sprintf("清空数据失败: %v", err))
-				} else {
-					infoArea.SetText("数据已清空")
-				}
-
+				taskQueue := operations.GetTaskQueue()
+				operations.ClearDataTask(db, taskQueue)
 				operations.InitData()
 			}),
 		),

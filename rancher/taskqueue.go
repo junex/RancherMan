@@ -15,6 +15,12 @@ const (
 	TaskTypeScaleOpen
 	TaskTypeScaleClose
 	TaskTypeUpdatePod
+	TaskTypeUpdateData      // 新增：更新数据
+	TaskTypeUpdatePortMap   // 新增：更新端口映射
+	TaskTypeScanJumpHost    // 新增：扫描跳板机配置
+	TaskTypeGetJumpHostInfo // 新增：获取目录跳板机信息
+	TaskTypeUpdateJumpHost  // 新增：更新跳板机数据库
+	TaskTypeClearData      // 新增：清空数据
 )
 
 // TaskStatus 定义任务状态
@@ -263,6 +269,34 @@ func (tq *TaskQueue) executeTask(task *Task) {
 		log.Printf("[executeTask] Executing UpdatePod for environment %s", task.Environment.Name)
 		UpdatePod(task.DB, task.Environment.ID, &task.Environment)
 		result.Success = true
+
+	case TaskTypeUpdateData:
+		log.Printf("[executeTask] Executing UpdateData for environment %s", task.Environment.Name)
+		result.Success = UpdateEnvironmentData(task.DB, task.Environment.ID, &task.Environment, tq.ui)
+
+	case TaskTypeUpdatePortMap:
+		log.Printf("[executeTask] Executing UpdatePortMap for environment %s", task.Environment.Name)
+		result.Success = UpdateServiceData(task.DB, task.Environment.ID, &task.Environment, tq.ui)
+
+	case TaskTypeScanJumpHost:
+		log.Printf("[executeTask] Executing ScanJumpHost")
+		result.Success = ScanJumpHostConfig(task.DB, &task.Environment)
+
+	case TaskTypeGetJumpHostInfo:
+		log.Printf("[executeTask] Executing GetJumpHostInfo")
+		result.Success = GetJumpHostDirectoryInfo(task.DB, &task.Environment)
+
+	case TaskTypeUpdateJumpHost:
+		log.Printf("[executeTask] Executing UpdateJumpHost")
+		result.Success = UpdateJumpHostDatabase(task.DB)
+
+	case TaskTypeClearData:
+		log.Printf("[executeTask] Executing ClearData")
+		err := task.DB.ClearAllData()
+		result.Success = err == nil
+		if err != nil {
+			result.Error = err
+		}
 	}
 
 	tq.mu.Lock()

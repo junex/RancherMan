@@ -2,6 +2,7 @@ package operations
 
 import (
 	"fmt"
+	"log"
 	"os"
 	"strings"
 
@@ -185,4 +186,52 @@ func CloneOrExportConfigMap(isClone bool, destNamespace rancher.Namespace) {
 	}
 
 	gInfoArea.SetText(info.String())
+}
+
+// UpdateDataTask 创建更新数据任务
+func UpdateDataTask(env *rancher.Environment, db *rancher.DatabaseManager, taskQueue *rancher.TaskQueue) {
+	if env == nil {
+		log.Printf("[UpdateDataTask] ERROR: Environment is nil!")
+		return
+	}
+
+	newTask := &rancher.Task{
+		Type:        rancher.TaskTypeUpdateData,
+		Description: fmt.Sprintf("更新数据: %s", env.Name),
+		Environment: *env,
+		DB:          db,
+	}
+	taskID := taskQueue.AddTask(newTask)
+	log.Printf("[UpdateDataTask] Task added: ID=%d, Description=%s", taskID, newTask.Description)
+	taskQueue.Submit(newTask)
+}
+
+// UpdatePortMapTask 创建更新端口映射任务
+func UpdatePortMapTask(env *rancher.Environment, db *rancher.DatabaseManager, taskQueue *rancher.TaskQueue) {
+	if env == nil {
+		log.Printf("[UpdatePortMapTask] ERROR: Environment is nil!")
+		return
+	}
+
+	newTask := &rancher.Task{
+		Type:        rancher.TaskTypeUpdatePortMap,
+		Description: fmt.Sprintf("更新端口映射: %s", env.Name),
+		Environment: *env,
+		DB:          db,
+	}
+	taskID := taskQueue.AddTask(newTask)
+	log.Printf("[UpdatePortMapTask] Task added: ID=%d, Description=%s", taskID, newTask.Description)
+	taskQueue.Submit(newTask)
+}
+
+// ClearDataTask 创建清空数据任务
+func ClearDataTask(db *rancher.DatabaseManager, taskQueue *rancher.TaskQueue) {
+	newTask := &rancher.Task{
+		Type:        rancher.TaskTypeClearData,
+		Description: "清空数据",
+		DB:          db,
+	}
+	taskID := taskQueue.AddTask(newTask)
+	log.Printf("[ClearDataTask] Task added: ID=%d, Description=%s", taskID, newTask.Description)
+	taskQueue.Submit(newTask)
 }

@@ -2,6 +2,7 @@ package rancher
 
 import (
 	"fmt"
+	"log"
 	"strings"
 
 	"encoding/json"
@@ -190,6 +191,106 @@ func UpdatePod(db *DatabaseManager, envName string, environment *Environment) {
 		fmt.Printf("插入Pod数据失败: %v\n", err)
 		return
 	}
+}
+
+// UpdateEnvironmentData 更新环境数据（支持多环境）
+func UpdateEnvironmentData(db *DatabaseManager, envID string, env *Environment, taskQueueUI interface{UpdateStatus(string, string, int, int, string)}) bool {
+	config, _ := LoadConfigFromDb(db)
+	totalEnvs := 0
+	completedEnvs := 0
+
+	// 获取所有环境数量
+	if env == nil {
+		for _, _ = range config["environment"].(map[interface{}]interface{}) {
+			totalEnvs++
+		}
+	} else {
+		totalEnvs = 1
+	}
+
+	// 更新每个环境
+	for envName, _ := range config["environment"].(map[interface{}]interface{}) {
+		environment, _ := GetEnvironmentFromConfig(config, envName.(string))
+
+		// 更新进度
+		completedEnvs++
+		if taskQueueUI != nil {
+			taskQueueUI.UpdateStatus(
+				"更新数据",
+				".",
+				completedEnvs,
+				totalEnvs,
+				fmt.Sprintf("环境 %s", environment.Name),
+			)
+		}
+
+		// 执行更新
+		UpdateEnvironment(db, environment.Name, environment, true)
+	}
+
+	return true
+}
+
+// UpdateServiceData 更新服务数据（支持多环境）
+func UpdateServiceData(db *DatabaseManager, envID string, env *Environment, taskQueueUI interface{UpdateStatus(string, string, int, int, string)}) bool {
+	config, _ := LoadConfigFromDb(db)
+	totalEnvs := 0
+	completedEnvs := 0
+
+	// 获取所有环境数量
+	if env == nil {
+		for _, _ = range config["environment"].(map[interface{}]interface{}) {
+			totalEnvs++
+		}
+	} else {
+		totalEnvs = 1
+	}
+
+	// 更新每个环境
+	for envName, _ := range config["environment"].(map[interface{}]interface{}) {
+		environment, _ := GetEnvironmentFromConfig(config, envName.(string))
+
+		// 更新进度
+		completedEnvs++
+		if taskQueueUI != nil {
+			taskQueueUI.UpdateStatus(
+				"更新端口映射",
+				".",
+				completedEnvs,
+				totalEnvs,
+				fmt.Sprintf("环境 %s", environment.Name),
+			)
+		}
+
+		// 执行更新
+		UpdateService(db, environment.Name, environment)
+	}
+
+	return true
+}
+
+// ScanJumpHostConfig 扫描跳板机配置
+func ScanJumpHostConfig(db *DatabaseManager, env *Environment) bool {
+	// 实现扫描跳板机配置的逻辑
+	// 这里需要根据实际需求实现具体的扫描逻辑
+	log.Printf("[ScanJumpHostConfig] 扫描跳板机配置")
+	return true
+}
+
+// GetJumpHostDirectoryInfo 获取目录跳板机信息
+func GetJumpHostDirectoryInfo(db *DatabaseManager, env *Environment) bool {
+	// 实现获取目录跳板机信息的逻辑
+	// 这里需要根据实际需求实现具体的获取逻辑
+	log.Printf("[GetJumpHostDirectoryInfo] 获取目录跳板机信息")
+	return true
+}
+
+// UpdateJumpHostDatabase 更新跳板机数据库
+func UpdateJumpHostDatabase(db *DatabaseManager) bool {
+	// 实现更新跳板机数据库的逻辑
+	// 这里需要根据实际需求实现具体的更新逻辑
+	log.Printf("[UpdateJumpHostDatabase] 更新跳板机数据库")
+	return true
 }
 
 func GetEnvironmentFromConfig(config map[string]interface{}, envName string) (*Environment, error) {
