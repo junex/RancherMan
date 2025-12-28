@@ -5,12 +5,13 @@ import (
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
+	"fyne.io/fyne/v2/layout"
 	"fyne.io/fyne/v2/widget"
 )
 
 // TaskStatusBar 任务状态栏组件
 type TaskStatusBar struct {
-	container     *fyne.Container // 改为私有字段
+	container     *fyne.Container
 	statusLabel   *widget.Label
 	dotsLabel     *widget.Label
 	taskInfoLabel *widget.Label
@@ -24,45 +25,61 @@ func NewTaskStatusBar(onCancel func()) *TaskStatusBar {
 	dotsLabel := widget.NewLabel("")
 	taskInfoLabel := widget.NewLabel("")
 	countLabel := widget.NewLabel("")
+
 	cancelButton := widget.NewButton("取消所有", onCancel)
 	cancelButton.Disable()
 
-	statusBar := container.NewHBox(
+	// === 左侧内容 ===
+	left := container.NewHBox(
 		statusLabel,
 		dotsLabel,
 		widget.NewSeparator(),
 		taskInfoLabel,
-		widget.NewSeparator(),
+	)
+
+	// === 右侧内容（始终靠右） ===
+	right := container.NewHBox(
 		countLabel,
 		widget.NewSeparator(),
 		cancelButton,
 	)
 
-	statusBarWithPadding := container.NewVBox(
+	// === 整体状态栏 ===
+	statusBar := container.NewHBox(
+		left,
+		layout.NewSpacer(), // 🔥 核心：把 right 顶到最右
+		right,
+	)
+
+	// 上边框 + 内边距
+	root := container.NewVBox(
 		widget.NewSeparator(),
 		container.NewPadded(statusBar),
 	)
 
-	bar := &TaskStatusBar{
-		container:     statusBarWithPadding,
+	return &TaskStatusBar{
+		container:     root,
 		statusLabel:   statusLabel,
 		dotsLabel:     dotsLabel,
 		taskInfoLabel: taskInfoLabel,
 		countLabel:    countLabel,
 		cancelButton:  cancelButton,
 	}
-
-	return bar
 }
 
-// GetContainer 返回可渲染的容器（添加这个方法）
+// GetContainer 返回可渲染的容器
 func (bar *TaskStatusBar) GetContainer() *fyne.Container {
 	return bar.container
 }
 
 // Update 更新状态栏显示
-func (bar *TaskStatusBar) Update(status string, dots string, taskInfo string, current int, total int) {
-
+func (bar *TaskStatusBar) Update(
+	status string,
+	dots string,
+	taskInfo string,
+	current int,
+	total int,
+) {
 	bar.statusLabel.SetText(status)
 	bar.dotsLabel.SetText(dots)
 	bar.taskInfoLabel.SetText(taskInfo)
@@ -73,13 +90,11 @@ func (bar *TaskStatusBar) Update(status string, dots string, taskInfo string, cu
 		bar.countLabel.SetText("")
 	}
 
-	hasRunning := (status == "执行")
-	if hasRunning {
+	if status == "执行" {
 		bar.cancelButton.Enable()
 	} else {
 		bar.cancelButton.Disable()
 	}
 
-	// 刷新容器而不是自身
 	bar.container.Refresh()
 }
