@@ -62,7 +62,6 @@ func (bar *TaskStatusBar) GetContainer() *fyne.Container {
 
 // Update 更新状态栏显示
 func (bar *TaskStatusBar) Update(status string, dots string, taskInfo string, current int, total int) {
-	fmt.Printf("[StatusBar.Update] status=%s dots=%s taskInfo=%s current=%d total=%d\n", status, dots, taskInfo, current, total)
 
 	bar.statusLabel.SetText(status)
 	bar.dotsLabel.SetText(dots)

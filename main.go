@@ -487,7 +487,6 @@ func initView() fyne.Window {
 type taskQueueUI struct{}
 
 func (t *taskQueueUI) UpdateStatus(status string, dots string, current int, total int, taskInfo string) {
-	log.Printf("[UpdateStatus] status=%s dots=%s current=%d total=%d taskInfo=%s", status, dots, current, total, taskInfo)
 
 	// 使用 goroutine UI 更新确保在主线程中更新
 	if gTaskStatusBar != nil {
