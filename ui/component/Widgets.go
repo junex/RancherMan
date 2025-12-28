@@ -5,17 +5,23 @@ import (
 	"fyne.io/fyne/v2/widget"
 )
 
-// MultiSelectList 是一个可点击的标签组件
+// MultiSelectList 是一个支持多选的列表组件
 type MultiSelectList struct {
-	*widget.List
-	onSelectMulti func(ids []int)
-	selectedIds   map[int]struct{}
+	widget.BaseWidget // 添加这个基础组件
+	list              *widget.List
+	onSelectMulti     func(ids []int)
+	selectedIds       map[int]struct{}
 }
 
 func NewList(length func() int, createItem func() fyne.CanvasObject, updateItem func(widget.ListItemID, fyne.CanvasObject)) *MultiSelectList {
+	ml := &MultiSelectList{
+		onSelectMulti: func(ids []int) {},
+		selectedIds:   make(map[int]struct{}),
+	}
+
 	list := widget.NewList(length, createItem, updateItem)
-	list.ExtendBaseWidget(list)
-	ml := &MultiSelectList{List: list, onSelectMulti: func(ids []int) {}, selectedIds: make(map[int]struct{})}
+	ml.list = list
+
 	list.OnSelected = func(id int) {
 		// 检查id是否已存在于selectedIds中
 		if _, exists := ml.selectedIds[id]; exists {
@@ -30,9 +36,47 @@ func NewList(length func() int, createItem func() fyne.CanvasObject, updateItem 
 		list.Unselect(id)
 		list.RefreshItem(id)
 	}
+
+	ml.ExtendBaseWidget(ml)
 	return ml
 }
 
+// CreateRenderer 实现 fyne.Widget 接口
+func (t *MultiSelectList) CreateRenderer() fyne.WidgetRenderer {
+	return widget.NewSimpleRenderer(t.list)
+}
+
+// MinSize 返回最小尺寸，委托给内部的 list
+func (t *MultiSelectList) MinSize() fyne.Size {
+	return t.list.MinSize()
+}
+
+// 以下是委托方法，转发到内部的 list
+func (t *MultiSelectList) Select(id widget.ListItemID) {
+	t.list.Select(id)
+}
+
+func (t *MultiSelectList) Unselect(id widget.ListItemID) {
+	t.list.Unselect(id)
+}
+
+func (t *MultiSelectList) UnselectAll() {
+	t.list.UnselectAll()
+}
+
+func (t *MultiSelectList) ScrollToTop() {
+	t.list.ScrollToTop()
+}
+
+func (t *MultiSelectList) RefreshItem(id widget.ListItemID) {
+	t.list.RefreshItem(id)
+}
+
+func (t *MultiSelectList) Length() int {
+	return t.list.Length()
+}
+
+// 多选相关方法
 func (t *MultiSelectList) OnMultiSelected(selectMulti func(ids []int)) {
 	t.onSelectMulti = selectMulti
 }
