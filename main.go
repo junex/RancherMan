@@ -44,6 +44,11 @@ var gEnvironment *rancher.Environment
 var gJumpHostConfig *rancher.JumpHostConfig
 var gCloneIgnoreTagWorkload []string
 
+// 任务队列
+var gTaskQueue *rancher.TaskQueue
+var gTaskStatusBar *component.TaskStatusBar
+var gOperationButtons []*widget.Button
+
 func main() {
 	//// 创建数据库管理器实例
 	database, err := rancher.NewDatabaseManager("")
@@ -52,9 +57,17 @@ func main() {
 	}
 	gDb = database
 	defer gDb.Close()
+
+	// 初始化任务队列
+	gTaskQueue = rancher.NewTaskQueue()
+
 	window := initView()
 	loadConfig(false)
 	initData()
+
+	// 启动任务队列
+	gTaskQueue.Start(&taskQueueUI{})
+
 	window.ShowAndRun()
 }
 func initView() fyne.Window {
@@ -263,6 +276,8 @@ func initView() fyne.Window {
 		},
 	)
 	gWorkloadList.OnMultiSelected(func(ids []int) {
+		log.Printf("[OnMultiSelected] Selected IDs: %v, len(gFilteredWorkloads)=%d", ids, len(gFilteredWorkloads))
+
 		// 清空之前选择的workloads
 		gSelectedWorkloads = []rancher.Workload{}
 
@@ -270,8 +285,10 @@ func initView() fyne.Window {
 		for _, id := range ids {
 			if id < len(gFilteredWorkloads) {
 				gSelectedWorkloads = append(gSelectedWorkloads, gFilteredWorkloads[id])
+				log.Printf("[OnMultiSelected] Added workload: %s (id=%d)", gFilteredWorkloads[id].Name, id)
 			}
 		}
+		log.Printf("[OnMultiSelected] Total selected workloads: %d", len(gSelectedWorkloads))
 		// 更新信息区域显示
 		updateInfoArea()
 	})
@@ -298,112 +315,126 @@ func initView() fyne.Window {
 
 	// 添加更pod按钮
 	buttonUpdatePod := widget.NewButton("更新Pod", func() {
-		var info strings.Builder
+		log.Printf("[buttonUpdatePod] Clicked, gEnvironment=%v", gEnvironment != nil)
 		if gEnvironment != nil {
 			// 只更新当前选中的环境
-			info.WriteString(fmt.Sprintf("更新Pod: %s ", gEnvironment.Name))
-			gInfoArea.SetText(info.String())
-			rancher.UpdatePod(gDb, gEnvironment.ID, gEnvironment)
-			info.WriteString("完成!\n")
-			gInfoArea.SetText(info.String())
-		} else {
-			// 如果没有选中环境，则更新所有环境
-			for envName, _ := range gConfig["environment"].(map[interface{}]interface{}) {
-				environment, _ := rancher.GetEnvironmentFromConfig(gConfig, envName.(string))
-				info.WriteString(fmt.Sprintf("更新Pod: %s ", environment.Name))
-				gInfoArea.SetText(info.String())
-				rancher.UpdateEnvironment(gDb, environment.ID, environment, false)
-				info.WriteString("完成!\n")
-				gInfoArea.SetText(info.String())
+			newTask := &rancher.Task{
+				Type:        rancher.TaskTypeUpdatePod,
+				Description: fmt.Sprintf("更新Pod: %s", gEnvironment.Name),
+				Environment: *gEnvironment,
+				DB:          gDb,
 			}
+			taskID := gTaskQueue.AddTask(newTask)
+			log.Printf("[buttonUpdatePod] Task added: ID=%d, Description=%s", taskID, newTask.Description)
+			gTaskQueue.Submit(newTask)
+		} else {
+			log.Printf("[buttonUpdatePod] gEnvironment is nil, skipping")
 		}
-		updateInfoArea()
 	})
 
 	buttonOpen := widget.NewButton("打开", func() {
-		var info strings.Builder
-		if len(gSelectedWorkloads) > 0 {
-			// 处理多选的情况
-			for _, workload := range gSelectedWorkloads {
-				info.WriteString(fmt.Sprintf("打开: %s", workload.Name))
-				success := rancher.Scale(*gEnvironment, workload.Namespace, workload.Name, 1)
-				if success {
-					info.WriteString("成功!\n")
-				} else {
-					info.WriteString("失败!\n")
-				}
-				gInfoArea.SetText(info.String())
+		log.Printf("[buttonOpen] Clicked, gEnvironment=%v", gEnvironment != nil)
+		log.Printf("[buttonOpen] len(gSelectedWorkloads)=%d, len(gFilteredWorkloads)=%d", len(gSelectedWorkloads), len(gFilteredWorkloads))
+
+		if gEnvironment == nil {
+			log.Printf("[buttonOpen] ERROR: gEnvironment is nil!")
+			gInfoArea.SetText("错误: 请先选择命名空间")
+			return
+		}
+
+		workloadsToProcess := gSelectedWorkloads
+		if len(workloadsToProcess) == 0 {
+			log.Printf("[buttonOpen] No selected workloads, using filtered workloads")
+			workloadsToProcess = gFilteredWorkloads
+		}
+
+		log.Printf("[buttonOpen] Processing %d workloads", len(workloadsToProcess))
+
+		for _, workload := range workloadsToProcess {
+			log.Printf("[buttonOpen] Creating task for workload: %s", workload.Name)
+			newTask := &rancher.Task{
+				Type:        rancher.TaskTypeScaleOpen,
+				Description: fmt.Sprintf("打开 %s", workload.Name),
+				Environment: *gEnvironment,
+				Namespace:   workload.Namespace,
+				Workload:    workload.Name,
+				Replicas:    1,
 			}
-		} else if len(gFilteredWorkloads) > 0 {
-			// 处理未选择的情况，使用过滤列表中的所有数据
-			for _, workload := range gFilteredWorkloads {
-				info.WriteString(fmt.Sprintf("打开: %s    ", workload.Name))
-				success := rancher.Scale(*gEnvironment, workload.Namespace, workload.Name, 1)
-				if success {
-					info.WriteString("成功!\n")
-				} else {
-					info.WriteString("失败!\n")
-				}
-				gInfoArea.SetText(info.String())
-			}
+			log.Printf("[buttonOpen] About to call AddTask...")
+			taskID := gTaskQueue.AddTask(newTask)
+			log.Printf("[buttonOpen] Task added: ID=%d, Description=%s", taskID, newTask.Description)
+			gTaskQueue.Submit(newTask)
 		}
 	})
 	buttonClose := widget.NewButton("关闭", func() {
-		var info strings.Builder
-		if len(gSelectedWorkloads) > 0 {
-			// 处理多选的情况
-			for _, workload := range gSelectedWorkloads {
-				info.WriteString(fmt.Sprintf("关闭: %s    ", workload.Name))
-				success := rancher.Scale(*gEnvironment, workload.Namespace, workload.Name, 0)
-				if success {
-					info.WriteString("成功!\n")
-				} else {
-					info.WriteString("失败!\n")
-				}
-				gInfoArea.SetText(info.String())
+		log.Printf("[buttonClose] Clicked, gEnvironment=%v", gEnvironment != nil)
+
+		if gEnvironment == nil {
+			log.Printf("[buttonClose] ERROR: gEnvironment is nil!")
+			gInfoArea.SetText("错误: 请先选择命名空间")
+			return
+		}
+
+		workloadsToProcess := gSelectedWorkloads
+		if len(workloadsToProcess) == 0 {
+			workloadsToProcess = gFilteredWorkloads
+		}
+
+		log.Printf("[buttonClose] Processing %d workloads", len(workloadsToProcess))
+
+		for _, workload := range workloadsToProcess {
+			newTask := &rancher.Task{
+				Type:        rancher.TaskTypeScaleClose,
+				Description: fmt.Sprintf("关闭 %s", workload.Name),
+				Environment: *gEnvironment,
+				Namespace:   workload.Namespace,
+				Workload:    workload.Name,
+				Replicas:    0,
 			}
-		} else if len(gFilteredWorkloads) > 0 {
-			// 处理未选择的情况，使用过滤列表中的所有数据
-			for _, workload := range gFilteredWorkloads {
-				info.WriteString(fmt.Sprintf("关闭: %s    ", workload.Name))
-				success := rancher.Scale(*gEnvironment, workload.Namespace, workload.Name, 0)
-				if success {
-					info.WriteString("成功!\n")
-				} else {
-					info.WriteString("失败!\n")
-				}
-				gInfoArea.SetText(info.String())
-			}
+			taskID := gTaskQueue.AddTask(newTask)
+			log.Printf("[buttonClose] Task added: ID=%d, Description=%s", taskID, newTask.Description)
+			gTaskQueue.Submit(newTask)
 		}
 	})
 	buttonRedeploy := widget.NewButton("重新部署", func() {
-		var info strings.Builder
-		if len(gSelectedWorkloads) > 0 {
-			// 处理多选的情况
-			for _, workload := range gSelectedWorkloads {
-				info.WriteString(fmt.Sprintf("重新部署: %s    ", workload.Name))
-				success := rancher.Redeploy(*gEnvironment, workload.Namespace, workload.Name)
-				if success {
-					info.WriteString("成功!\n")
-				} else {
-					info.WriteString("失败!\n")
-				}
-				gInfoArea.SetText(info.String())
+		log.Printf("[buttonRedeploy] Clicked, gEnvironment=%v", gEnvironment != nil)
+
+		if gEnvironment == nil {
+			log.Printf("[buttonRedeploy] ERROR: gEnvironment is nil!")
+			gInfoArea.SetText("错误: 请先选择命名空间")
+			return
+		}
+
+		workloadsToProcess := gSelectedWorkloads
+		if len(workloadsToProcess) == 0 {
+			workloadsToProcess = gFilteredWorkloads
+		}
+
+		log.Printf("[buttonRedeploy] Processing %d workloads", len(workloadsToProcess))
+
+		for _, workload := range workloadsToProcess {
+			newTask := &rancher.Task{
+				Type:        rancher.TaskTypeRedeploy,
+				Description: fmt.Sprintf("重新部署 %s", workload.Name),
+				Environment: *gEnvironment,
+				Namespace:   workload.Namespace,
+				Workload:    workload.Name,
 			}
-		} else if len(gFilteredWorkloads) > 0 {
-			// 处理未选择的情况，使用过滤列表中的所有数据
-			for _, workload := range gFilteredWorkloads {
-				info.WriteString(fmt.Sprintf("重新部署: %s    ", workload.Name))
-				success := rancher.Redeploy(*gEnvironment, workload.Namespace, workload.Name)
-				if success {
-					info.WriteString("成功!\n")
-				} else {
-					info.WriteString("失败!\n")
-				}
-				gInfoArea.SetText(info.String())
-			}
+			taskID := gTaskQueue.AddTask(newTask)
+			log.Printf("[buttonRedeploy] Task added: ID=%d, Description=%s", taskID, newTask.Description)
+			gTaskQueue.Submit(newTask)
 		}
 	})
+
+	// 创建任务状态栏
+	gTaskStatusBar = component.NewTaskStatusBar(func() {
+		if gTaskQueue != nil {
+			gTaskQueue.CancelAll()
+		}
+	})
+
+	// 收集所有操作按钮用于禁用/启用
+	gOperationButtons = []*widget.Button{buttonUpdatePod, buttonOpen, buttonClose, buttonRedeploy}
 
 	// 使用 Border 布局让高度自适应
 	// 每一列内部用 Border：顶部是标签和搜索框，中间是滚动内容（自动扩展），底部为空
@@ -429,24 +460,67 @@ func initView() fyne.Window {
 		workloadScroll,
 	)
 
+	// 右侧区域：顶部是按钮，中间是信息区域
 	rightCol := container.NewBorder(
-		container.NewHBox(buttonUpdatePod, buttonOpen, buttonClose, buttonRedeploy),
-		nil,
-		nil,
-		nil,
-		infoContainer,
+		container.NewHBox(buttonUpdatePod, buttonOpen, buttonClose, buttonRedeploy), // top
+		nil, // bottom
+		nil, // left
+		nil, // right
+		infoContainer, // center
 	)
 
-	// 将左右两列合并放在左边
+	// 将左右两列合并放在一起
 	leftPanel := container.NewHBox(leftCol, middleCol)
 
-	// Border 布局：左边是两列，右边是 InfoArea（会自动填充剩余空间）
-	content := container.NewBorder(nil, nil, leftPanel, nil, rightCol)
+	// 上半部分：左边是两列，右边是 InfoArea
+	topContent := container.NewBorder(nil, nil, leftPanel, nil, rightCol)
+
+	// 整体布局：上部是内容区，底部是任务栏（横跨整个窗口）
+	content := container.NewBorder(nil, gTaskStatusBar, nil, nil, topContent)
 	myWindow.SetContent(content)
 	// 设置窗口初始大小
 	myWindow.Resize(fyne.NewSize(1050, 600))
 	return myWindow
 }
+
+// taskQueueUI 实现任务队列UI回调
+type taskQueueUI struct{}
+
+func (t *taskQueueUI) UpdateStatus(status string, dots string, current int, total int, taskInfo string) {
+	log.Printf("[UpdateStatus] status=%s dots=%s current=%d total=%d taskInfo=%s", status, dots, current, total, taskInfo)
+
+	// 使用 goroutine UI 更新确保在主线程中更新
+	if gTaskStatusBar != nil {
+		gTaskStatusBar.Update(status, dots, taskInfo, current, total)
+	}
+
+	// 根据是否有任务禁用/启用按钮
+	hasRunning := (status == "执行")
+	for _, btn := range gOperationButtons {
+		if hasRunning {
+			btn.Disable()
+		} else {
+			btn.Enable()
+		}
+	}
+}
+
+func (t *taskQueueUI) OnTaskComplete(task *rancher.Task, result rancher.TaskResult) {
+	log.Printf("[OnTaskComplete] task=%s success=%v", task.Description, result.Success)
+
+	info := fmt.Sprintf("任务完成: %s - ", task.Description)
+	if result.Success {
+		info += "成功\n"
+	} else {
+		info += fmt.Sprintf("失败: %v\n", result.Error)
+	}
+
+	// 追加到现有文本末尾，然后调用 updateInfoArea 刷新显示
+	currentText := gInfoArea.Text
+	gInfoArea.SetText(currentText + info)
+	updateInfoArea()
+}
+
 func loadConfig(showSuccessTip bool) {
 	var err error
 	gConfig, err = rancher.LoadConfigFromDb(gDb)
@@ -494,9 +568,14 @@ func initData() {
 func selectNamespace(namespace rancher.Namespace) {
 	gSelectedNamespace = namespace
 	gEnvironment, _ = rancher.GetEnvironmentFromConfig(gConfig, gSelectedNamespace.Environment)
+	log.Printf("[selectNamespace] Selected namespace: %s, gEnvironment=%v", namespace.Name, gEnvironment != nil)
+	if gEnvironment != nil {
+		log.Printf("[selectNamespace] Environment: Name=%s, ID=%s", gEnvironment.Name, gEnvironment.ID)
+	}
 
 	workloads, _ := gDb.GetWorkloadsByNamespace(namespace.Name)
 	gWorkloads = workloads
+	log.Printf("[selectNamespace] Loaded %d workloads", len(workloads))
 	gWorkloadSearch.SetText("")
 	gFilteredWorkloads = gWorkloads
 	gSelectedWorkloads = []rancher.Workload{}
