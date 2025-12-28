@@ -463,9 +463,9 @@ func initView() fyne.Window {
 	// 右侧区域：顶部是按钮，中间是信息区域
 	rightCol := container.NewBorder(
 		container.NewHBox(buttonUpdatePod, buttonOpen, buttonClose, buttonRedeploy), // top
-		nil, // bottom
-		nil, // left
-		nil, // right
+		nil,           // bottom
+		nil,           // left
+		nil,           // right
 		infoContainer, // center
 	)
 
@@ -476,7 +476,7 @@ func initView() fyne.Window {
 	topContent := container.NewBorder(nil, nil, leftPanel, nil, rightCol)
 
 	// 整体布局：上部是内容区，底部是任务栏（横跨整个窗口）
-	content := container.NewBorder(nil, gTaskStatusBar, nil, nil, topContent)
+	content := container.NewBorder(nil, gTaskStatusBar.GetContainer(), nil, nil, topContent)
 	myWindow.SetContent(content)
 	// 设置窗口初始大小
 	myWindow.Resize(fyne.NewSize(1050, 600))

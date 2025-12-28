@@ -2,6 +2,7 @@ package component
 
 import (
 	"fmt"
+
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/widget"
@@ -9,7 +10,7 @@ import (
 
 // TaskStatusBar 任务状态栏组件
 type TaskStatusBar struct {
-	*fyne.Container
+	container     *fyne.Container // 改为私有字段
 	statusLabel   *widget.Label
 	dotsLabel     *widget.Label
 	taskInfoLabel *widget.Label
@@ -24,9 +25,8 @@ func NewTaskStatusBar(onCancel func()) *TaskStatusBar {
 	taskInfoLabel := widget.NewLabel("")
 	countLabel := widget.NewLabel("")
 	cancelButton := widget.NewButton("取消所有", onCancel)
-	cancelButton.Disable() // 初始禁用
+	cancelButton.Disable()
 
-	// 状态栏布局: [状态] [点动效] | [任务信息] | [数量] | [取消按钮]
 	statusBar := container.NewHBox(
 		statusLabel,
 		dotsLabel,
@@ -38,14 +38,13 @@ func NewTaskStatusBar(onCancel func()) *TaskStatusBar {
 		cancelButton,
 	)
 
-	// 添加内边距和顶部分隔线，确保状态栏有足够高度且可见
 	statusBarWithPadding := container.NewVBox(
 		widget.NewSeparator(),
 		container.NewPadded(statusBar),
 	)
 
 	bar := &TaskStatusBar{
-		Container:     statusBarWithPadding,
+		container:     statusBarWithPadding,
 		statusLabel:   statusLabel,
 		dotsLabel:     dotsLabel,
 		taskInfoLabel: taskInfoLabel,
@@ -56,9 +55,13 @@ func NewTaskStatusBar(onCancel func()) *TaskStatusBar {
 	return bar
 }
 
+// GetContainer 返回可渲染的容器（添加这个方法）
+func (bar *TaskStatusBar) GetContainer() *fyne.Container {
+	return bar.container
+}
+
 // Update 更新状态栏显示
 func (bar *TaskStatusBar) Update(status string, dots string, taskInfo string, current int, total int) {
-	// 添加日志确认方法被调用
 	fmt.Printf("[StatusBar.Update] status=%s dots=%s taskInfo=%s current=%d total=%d\n", status, dots, taskInfo, current, total)
 
 	bar.statusLabel.SetText(status)
@@ -77,5 +80,7 @@ func (bar *TaskStatusBar) Update(status string, dots string, taskInfo string, cu
 	} else {
 		bar.cancelButton.Disable()
 	}
-	bar.Refresh()
+
+	// 刷新容器而不是自身
+	bar.container.Refresh()
 }
