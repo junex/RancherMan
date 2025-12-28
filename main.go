@@ -221,7 +221,7 @@ func initView() fyne.Window {
 	}
 
 	namespaceScroll := container.NewScroll(gNamespaceList)
-	namespaceScroll.SetMinSize(fyne.NewSize(200, 350))
+	namespaceScroll.SetMinSize(fyne.NewSize(250, 0))
 
 	// 创建服务workload索框
 	gWorkloadSearch = widget.NewEntry()
@@ -288,15 +288,13 @@ func initView() fyne.Window {
 	}
 
 	workloadScroll := container.NewScroll(gWorkloadList)
-	workloadScroll.SetMinSize(fyne.NewSize(200, 350))
+	workloadScroll.SetMinSize(fyne.NewSize(200, 0))
 
 	// 创建右侧信息区域
 	gInfoArea = widget.NewMultiLineEntry()
 	gInfoArea.SetText("")
-	gInfoArea.SetMinRowsVisible(15)
-	// 将 InfoArea 放固定大小的容器中
 	infoContainer := container.NewScroll(gInfoArea)
-	infoContainer.SetMinSize(fyne.NewSize(600, 380))
+	infoContainer.SetMinSize(fyne.NewSize(400, 0))
 
 	// 添加更pod按钮
 	buttonUpdatePod := widget.NewButton("更新Pod", func() {
@@ -407,24 +405,46 @@ func initView() fyne.Window {
 		}
 	})
 
-	// 更新布局（移除了buttonUpdateData）
-	content := container.NewHBox(
+	// 使用 Border 布局让高度自适应
+	// 每一列内部用 Border：顶部是标签和搜索框，中间是滚动内容（自动扩展），底部为空
+	leftCol := container.NewBorder(
 		container.NewVBox(
 			widget.NewLabel("命名空间"),
 			gNamespaceSearch,
-			namespaceScroll,
 		),
+		nil,
+		nil,
+		nil,
+		namespaceScroll,
+	)
+
+	middleCol := container.NewBorder(
 		container.NewVBox(
 			widget.NewLabel("服务"),
 			gWorkloadSearch,
-			workloadScroll,
 		),
-		container.NewVBox(
-			container.NewHBox(buttonUpdatePod, buttonOpen, buttonClose, buttonRedeploy),
-			infoContainer,
-		),
+		nil,
+		nil,
+		nil,
+		workloadScroll,
 	)
+
+	rightCol := container.NewBorder(
+		container.NewHBox(buttonUpdatePod, buttonOpen, buttonClose, buttonRedeploy),
+		nil,
+		nil,
+		nil,
+		infoContainer,
+	)
+
+	// 将左右两列合并放在左边
+	leftPanel := container.NewHBox(leftCol, middleCol)
+
+	// Border 布局：左边是两列，右边是 InfoArea（会自动填充剩余空间）
+	content := container.NewBorder(nil, nil, leftPanel, nil, rightCol)
 	myWindow.SetContent(content)
+	// 设置窗口初始大小
+	myWindow.Resize(fyne.NewSize(1050, 600))
 	return myWindow
 }
 func loadConfig(showSuccessTip bool) {
