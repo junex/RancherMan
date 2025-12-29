@@ -2,6 +2,7 @@ package rancher
 
 import (
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 
@@ -126,7 +127,7 @@ func NewDatabaseManager(dbFile string) (*DatabaseManager, error) {
 		dbFile = filepath.Join(appDir, "app.db")
 	}
 
-	fmt.Printf("使用数据库文件: %s\n", dbFile)
+	log.Printf("[NewDatabaseManager] 使用数据库文件: %s\n", dbFile)
 
 	db, err := gorm.Open(sqlite.Open(dbFile), &gorm.Config{})
 	if err != nil {

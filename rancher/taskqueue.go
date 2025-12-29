@@ -227,7 +227,7 @@ func (tq *TaskQueue) Start(ui TaskQueueUI) {
 				return
 			case task := <-tq.taskChan:
 				log.Printf("[TaskQueue] Received task from channel: ID=%d, Description=%s", task.ID, task.Description)
-				go tq.executeTask(task)
+				tq.executeTask(task)
 			}
 		}
 	}()
@@ -272,7 +272,7 @@ func (tq *TaskQueue) executeTask(task *Task) {
 
 	case TaskTypeUpdateData:
 		log.Printf("[executeTask] Executing UpdateData for environment %s", task.Environment.Name)
-		UpdateEnvironment(task.DB, task.Environment.Name, &task.Environment, true)
+		UpdateEnvironment(task.DB, &task.Environment, true)
 		result.Success = true
 
 	case TaskTypeUpdatePortMap:

@@ -88,7 +88,7 @@ func SaveConfigToDb(db *DatabaseManager, content string) {
 	db.InsertConfig(1, content)
 }
 
-func UpdateEnvironment(db *DatabaseManager, envName string, environment *Environment, forceUpdate bool) {
+func UpdateEnvironment(db *DatabaseManager, environment *Environment, forceUpdate bool) {
 	workloadCount, _ := db.GetWorkloadCountByEnvironment(environment.ID)
 	update := forceUpdate
 	if workloadCount == 0 {
@@ -97,7 +97,7 @@ func UpdateEnvironment(db *DatabaseManager, envName string, environment *Environ
 	if update {
 		// 更新namespace
 		var namespaceDBList []Namespace
-		db.DeleteNamespaceByEnvironment(envName)
+		db.DeleteNamespaceByEnvironment(environment.ID)
 		allNamespaces, _ := GetNamespaceList(*environment)
 		var namespaceList []NamespaceResp
 		for _, ns := range allNamespaces {
@@ -115,7 +115,7 @@ func UpdateEnvironment(db *DatabaseManager, envName string, environment *Environ
 		}
 		db.InsertNamespaces(namespaceDBList)
 		// 更新workload
-		db.DeleteWorkloadByEnv(envName)
+		db.DeleteWorkloadByEnv(environment.ID)
 		// Get nginx reverse proxy list
 		var nginxProxyList []ConfigEntry
 		for _, nginxConfig := range environment.nginxList {
