@@ -128,7 +128,7 @@ fyne package --help
 -sourceDir: 指定源代码目录
 
 ### todo
-1. 迁移更新跳板机
+1. 若批量打开或重新部署工作负载时,数据库等中间件优先启动，然后等10秒再启动其他的，portal和api类每个之间延时5秒
 2. 更新pod走websocket
 3. 执行命令行
 

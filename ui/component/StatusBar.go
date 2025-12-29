@@ -22,8 +22,8 @@ type TaskStatusBar struct {
 // NewTaskStatusBar 创建任务状态栏
 func NewTaskStatusBar(onCancel func()) *TaskStatusBar {
 	statusLabel := widget.NewLabel("空闲")
-	dotsLabel := widget.NewLabel("")
 	taskInfoLabel := widget.NewLabel("")
+	dotsLabel := widget.NewLabel("")
 	countLabel := widget.NewLabel("")
 
 	cancelButton := widget.NewButton("取消所有", onCancel)
@@ -34,11 +34,11 @@ func NewTaskStatusBar(onCancel func()) *TaskStatusBar {
 		statusLabel,
 		widget.NewSeparator(),
 		taskInfoLabel,
-		dotsLabel,
 	)
 
 	// === 右侧内容（始终靠右） ===
 	right := container.NewHBox(
+		dotsLabel,
 		countLabel,
 		widget.NewSeparator(),
 		cancelButton,

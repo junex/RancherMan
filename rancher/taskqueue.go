@@ -15,12 +15,10 @@ const (
 	TaskTypeScaleOpen
 	TaskTypeScaleClose
 	TaskTypeUpdatePod
-	TaskTypeUpdateData      // 新增：更新数据
-	TaskTypeUpdatePortMap   // 新增：更新端口映射
-	TaskTypeScanJumpHost    // 新增：扫描跳板机配置
-	TaskTypeGetJumpHostInfo // 新增：获取目录跳板机信息
-	TaskTypeUpdateJumpHost  // 新增：更新跳板机数据库
-	TaskTypeClearData       // 新增：清空数据
+	TaskTypeUpdateData     // 新增：更新数据
+	TaskTypeUpdatePortMap  // 新增：更新端口映射
+	TaskTypeUpdateJumpHost // 新增：扫描跳板机配置
+	TaskTypeClearData      // 新增：清空数据
 )
 
 // TaskStatus 定义任务状态
@@ -36,16 +34,17 @@ const (
 
 // Task 任务结构体
 type Task struct {
-	ID          int
-	Type        TaskType
-	Status      TaskStatus
-	Description string
-	Environment Environment
-	Namespace   string
-	Workload    string
-	Replicas    int
-	Error       error
-	DB          *DatabaseManager // 添加数据库引用
+	ID             int
+	Type           TaskType
+	Status         TaskStatus
+	Description    string
+	Environment    Environment
+	Namespace      string
+	Workload       string
+	Replicas       int
+	Error          error
+	DB             *DatabaseManager // 添加数据库引用
+	JumpHostConfig *JumpHostConfig
 }
 
 // TaskResult 任务执行结果
@@ -228,7 +227,7 @@ func (tq *TaskQueue) Start(ui TaskQueueUI) {
 				return
 			case task := <-tq.taskChan:
 				log.Printf("[TaskQueue] Received task from channel: ID=%d, Description=%s", task.ID, task.Description)
-				tq.executeTask(task)
+				go tq.executeTask(task)
 			}
 		}
 	}()
@@ -268,7 +267,7 @@ func (tq *TaskQueue) executeTask(task *Task) {
 
 	case TaskTypeUpdatePod:
 		log.Printf("[executeTask] Executing UpdatePod for environment %s", task.Environment.Name)
-		UpdatePod(task.DB, task.Environment.ID, &task.Environment)
+		UpdatePod(task.DB, &task.Environment)
 		result.Success = true
 
 	case TaskTypeUpdateData:
@@ -278,20 +277,12 @@ func (tq *TaskQueue) executeTask(task *Task) {
 
 	case TaskTypeUpdatePortMap:
 		log.Printf("[executeTask] Executing UpdatePortMap for environment %s", task.Environment.Name)
-		UpdateService(task.DB, task.Environment.Name, &task.Environment)
+		UpdateService(task.DB, &task.Environment)
 		result.Success = true
-
-	case TaskTypeScanJumpHost:
-		log.Printf("[executeTask] Executing ScanJumpHost")
-		result.Success = ScanJumpHostConfig(task.DB, &task.Environment)
-
-	case TaskTypeGetJumpHostInfo:
-		log.Printf("[executeTask] Executing GetJumpHostInfo")
-		result.Success = GetJumpHostDirectoryInfo(task.DB, &task.Environment)
 
 	case TaskTypeUpdateJumpHost:
 		log.Printf("[executeTask] Executing UpdateJumpHost")
-		result.Success = UpdateJumpHostDatabase(task.DB)
+		result.Success = UpdateJumpHostConfig(task.DB, task)
 
 	case TaskTypeClearData:
 		log.Printf("[executeTask] Executing ClearData")

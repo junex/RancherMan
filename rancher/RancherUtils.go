@@ -27,6 +27,46 @@ type NginxMap struct {
 	ConfPath string
 }
 
+type jumpHostProgressListener struct {
+	task *Task
+	db   *DatabaseManager
+}
+
+// NewJumpHostProgressListener 创建跳板机进度监听器
+func NewJumpHostProgressListener(task *Task, db *DatabaseManager) ProgressListener {
+	return &jumpHostProgressListener{
+		task: task,
+		db:   db,
+	}
+}
+
+func (l *jumpHostProgressListener) OnProgress(currentFolder string, current, total int) {
+	// 直接更新 UI
+	l.task.Description = fmt.Sprintf("更新跳板机 正在扫描: %d/%d  当前目录:%s", current, total, currentFolder)
+}
+
+func (l *jumpHostProgressListener) OnComplete() {
+	// 直接更新 UI
+	l.task.Description = fmt.Sprint("更新跳板机: 完成")
+}
+
+func (l *jumpHostProgressListener) OnBatchResult(configs []SSHUploadConfig) {
+	// 将 SSHUploadConfig 转换为 UploadConfig
+	var uploadConfigs []UploadConfig
+	for _, config := range configs {
+		uploadConfig := UploadConfig{
+			Dir:    config.Dir,
+			Script: config.Script,
+			Jar:    config.Jar,
+			Image:  config.Image,
+		}
+		uploadConfigs = append(uploadConfigs, uploadConfig)
+	}
+
+	// 插入数据库
+	l.db.InsertUploadConfigs(uploadConfigs)
+}
+
 func LoadConfigFromDb(db *DatabaseManager) (map[string]interface{}, error) {
 	configContent, err := db.GetConfigContent(1)
 	if err != nil {
@@ -49,7 +89,7 @@ func SaveConfigToDb(db *DatabaseManager, content string) {
 }
 
 func UpdateEnvironment(db *DatabaseManager, envName string, environment *Environment, forceUpdate bool) {
-	workloadCount, _ := db.GetWorkloadCountByEnvironment(environment.Name)
+	workloadCount, _ := db.GetWorkloadCountByEnvironment(environment.ID)
 	update := forceUpdate
 	if workloadCount == 0 {
 		update = true
@@ -122,9 +162,9 @@ func UpdateEnvironment(db *DatabaseManager, envName string, environment *Environ
 	}
 }
 
-func UpdateService(db *DatabaseManager, envName string, environment *Environment) {
+func UpdateService(db *DatabaseManager, environment *Environment) {
 	// 删除旧的pod数据
-	db.DeleteServiceByEnvironment(envName)
+	db.DeleteServiceByEnvironment(environment.ID)
 
 	// 获取所有pod
 	serviceList, err := GetServiceList(*environment)
@@ -164,9 +204,9 @@ func UpdateService(db *DatabaseManager, envName string, environment *Environment
 	}
 }
 
-func UpdatePod(db *DatabaseManager, envName string, environment *Environment) {
+func UpdatePod(db *DatabaseManager, environment *Environment) {
 	// 删除旧的pod数据
-	db.DeletePodByEnvironment(envName)
+	db.DeletePodByEnvironment(environment.ID)
 
 	// 获取所有pod
 	podList, err := GetPodList(*environment)
@@ -178,7 +218,7 @@ func UpdatePod(db *DatabaseManager, envName string, environment *Environment) {
 	var podsDBList []Pod
 	for _, pod := range podList {
 		podsDBList = append(podsDBList, Pod{
-			Environment: envName,
+			Environment: environment.ID,
 			ProjectId:   pod.ProjectId,
 			NamespaceId: pod.NamespaceId,
 			WorkloadId:  pod.WorkloadId,
@@ -193,27 +233,11 @@ func UpdatePod(db *DatabaseManager, envName string, environment *Environment) {
 	}
 }
 
-// ScanJumpHostConfig 扫描跳板机配置
-func ScanJumpHostConfig(db *DatabaseManager, env *Environment) bool {
-	// 实现扫描跳板机配置的逻辑
-	// 这里需要根据实际需求实现具体的扫描逻辑
-	log.Printf("[ScanJumpHostConfig] 扫描跳板机配置")
-	return true
-}
-
-// GetJumpHostDirectoryInfo 获取目录跳板机信息
-func GetJumpHostDirectoryInfo(db *DatabaseManager, env *Environment) bool {
-	// 实现获取目录跳板机信息的逻辑
-	// 这里需要根据实际需求实现具体的获取逻辑
-	log.Printf("[GetJumpHostDirectoryInfo] 获取目录跳板机信息")
-	return true
-}
-
-// UpdateJumpHostDatabase 更新跳板机数据库
-func UpdateJumpHostDatabase(db *DatabaseManager) bool {
-	// 实现更新跳板机数据库的逻辑
-	// 这里需要根据实际需求实现具体的更新逻辑
-	log.Printf("[UpdateJumpHostDatabase] 更新跳板机数据库")
+// UpdateJumpHostConfig 扫描跳板机配置
+func UpdateJumpHostConfig(db *DatabaseManager, task *Task) bool {
+	log.Printf("[UpdateJumpHostConfig] 更新跳板机")
+	db.DeleteAllUploadConfigs()
+	ListUploadConfig(task.JumpHostConfig, 50, NewJumpHostProgressListener(task, db))
 	return true
 }
 

@@ -80,10 +80,7 @@ func InitView() fyne.Window {
 					return
 				}
 
-				// 按顺序创建并执行三个跳板机任务
-				operations.ScanJumpHostTask(db, taskQueue)
-				operations.GetJumpHostInfoTask(db, taskQueue)
-				operations.UpdateJumpHostDBTask(db, taskQueue)
+				operations.UpdateJumpHostTask(db, jumpHostConfig, taskQueue)
 			}),
 			fyne.NewMenuItem("清空数据", func() {
 				db := operations.GetDb()
