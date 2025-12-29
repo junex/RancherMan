@@ -204,6 +204,8 @@ func UpdateDataTask(env *rancher.Environment, db *rancher.DatabaseManager, taskQ
 	taskID := taskQueue.AddTask(newTask)
 	log.Printf("[UpdateDataTask] Task added: ID=%d, Description=%s", taskID, newTask.Description)
 	taskQueue.Submit(newTask)
+	UpdatePortMapTask(env, db, taskQueue)
+	UpdatePodsTask(env, db, taskQueue)
 }
 
 // UpdatePortMapTask 创建更新端口映射任务
@@ -233,5 +235,66 @@ func ClearDataTask(db *rancher.DatabaseManager, taskQueue *rancher.TaskQueue) {
 	}
 	taskID := taskQueue.AddTask(newTask)
 	log.Printf("[ClearDataTask] Task added: ID=%d, Description=%s", taskID, newTask.Description)
+	taskQueue.Submit(newTask)
+}
+
+func UpdatePodsTask(env *rancher.Environment, db *rancher.DatabaseManager, taskQueue *rancher.TaskQueue) {
+	if env == nil {
+		log.Printf("[UpdatePodsTask] ERROR: Environment is nil!")
+		return
+	}
+	newTask := &rancher.Task{
+		Type:        rancher.TaskTypeUpdatePod,
+		Description: fmt.Sprintf("更新Pod: %s", env.Name),
+		Environment: *env,
+		DB:          db,
+	}
+	taskID := taskQueue.AddTask(newTask)
+	log.Printf("[UpdatePodsTask] Task added: ID=%d, Description=%s", taskID, newTask.Description)
+	taskQueue.Submit(newTask)
+}
+
+func OpenWorkloadTask(env *rancher.Environment, workload *rancher.Workload, taskQueue *rancher.TaskQueue) {
+	log.Printf("[OpenWorkloadTask] Creating task for workload: %s", workload.Name)
+	newTask := &rancher.Task{
+		Type:        rancher.TaskTypeScaleOpen,
+		Description: fmt.Sprintf("打开 %s", workload.Name),
+		Environment: *env,
+		Namespace:   workload.Namespace,
+		Workload:    workload.Name,
+		Replicas:    1,
+	}
+	log.Printf("[OpenWorkloadTask] About to call AddTask...")
+	taskID := taskQueue.AddTask(newTask)
+	log.Printf("[OpenWorkloadTask] Task added: ID=%d, Description=%s", taskID, newTask.Description)
+	taskQueue.Submit(newTask)
+}
+
+func CloseWorkloadTask(env *rancher.Environment, workload *rancher.Workload, taskQueue *rancher.TaskQueue) {
+	log.Printf("[CloseWorkloadTask] Creating task for workload: %s", workload.Name)
+	newTask := &rancher.Task{
+		Type:        rancher.TaskTypeScaleClose,
+		Description: fmt.Sprintf("关闭 %s", workload.Name),
+		Environment: *env,
+		Namespace:   workload.Namespace,
+		Workload:    workload.Name,
+		Replicas:    0,
+	}
+	taskID := taskQueue.AddTask(newTask)
+	log.Printf("[CloseWorkloadTask] Task added: ID=%d, Description=%s", taskID, newTask.Description)
+	taskQueue.Submit(newTask)
+}
+
+func RedeployWorkloadTask(env *rancher.Environment, workload *rancher.Workload, taskQueue *rancher.TaskQueue) {
+	log.Printf("[RedeployWorkloadTask] Creating task for workload: %s", workload.Name)
+	newTask := &rancher.Task{
+		Type:        rancher.TaskTypeRedeploy,
+		Description: fmt.Sprintf("重新部署 %s", workload.Name),
+		Environment: *env,
+		Namespace:   workload.Namespace,
+		Workload:    workload.Name,
+	}
+	taskID := taskQueue.AddTask(newTask)
+	log.Printf("[RedeployWorkloadTask] Task added: ID=%d, Description=%s", taskID, newTask.Description)
 	taskQueue.Submit(newTask)
 }

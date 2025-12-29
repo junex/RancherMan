@@ -1,7 +1,6 @@
 package ui
 
 import (
-	"fmt"
 	"log"
 
 	"fyne.io/fyne/v2"
@@ -199,8 +198,6 @@ func InitView() fyne.Window {
 		},
 	)
 	gWorkloadList.OnMultiSelected(func(ids []int) {
-		log.Printf("[OnMultiSelected] Selected IDs: %v, len(gFilteredWorkloads)=%d", ids, len(operations.GetFilteredWorkloads()))
-
 		// 清空之前选择的workloads
 		operations.SetSelectedWorkloads([]rancher.Workload{})
 
@@ -244,31 +241,19 @@ func InitView() fyne.Window {
 
 	// 添加更pod按钮
 	buttonUpdatePod := widget.NewButton("更新Pod", func() {
-		log.Printf("[buttonUpdatePod] Clicked, gEnvironment=%v", operations.GetEnvironment() != nil)
 		env := operations.GetEnvironment()
 		db := operations.GetDb()
 		taskQueue := operations.GetTaskQueue()
 
 		if env != nil {
 			// 只更新当前选中的环境
-			newTask := &rancher.Task{
-				Type:        rancher.TaskTypeUpdatePod,
-				Description: fmt.Sprintf("更新Pod: %s", env.Name),
-				Environment: *env,
-				DB:          db,
-			}
-			taskID := taskQueue.AddTask(newTask)
-			log.Printf("[buttonUpdatePod] Task added: ID=%d, Description=%s", taskID, newTask.Description)
-			taskQueue.Submit(newTask)
+			operations.UpdatePodsTask(env, db, taskQueue)
 		} else {
 			log.Printf("[buttonUpdatePod] gEnvironment is nil, skipping")
 		}
 	})
 
 	buttonOpen := widget.NewButton("打开", func() {
-		log.Printf("[buttonOpen] Clicked, gEnvironment=%v", operations.GetEnvironment() != nil)
-		log.Printf("[buttonOpen] len(gSelectedWorkloads)=%d, len(gFilteredWorkloads)=%d", len(operations.GetSelectedWorkloads()), len(operations.GetFilteredWorkloads()))
-
 		env := operations.GetEnvironment()
 		infoArea := operations.GetInfoArea()
 		taskQueue := operations.GetTaskQueue()
@@ -286,27 +271,12 @@ func InitView() fyne.Window {
 		}
 
 		log.Printf("[buttonOpen] Processing %d workloads", len(workloadsToProcess))
-
 		for _, workload := range workloadsToProcess {
-			log.Printf("[buttonOpen] Creating task for workload: %s", workload.Name)
-			newTask := &rancher.Task{
-				Type:        rancher.TaskTypeScaleOpen,
-				Description: fmt.Sprintf("打开 %s", workload.Name),
-				Environment: *env,
-				Namespace:   workload.Namespace,
-				Workload:    workload.Name,
-				Replicas:    1,
-			}
-			log.Printf("[buttonOpen] About to call AddTask...")
-			taskID := taskQueue.AddTask(newTask)
-			log.Printf("[buttonOpen] Task added: ID=%d, Description=%s", taskID, newTask.Description)
-			taskQueue.Submit(newTask)
+			operations.OpenWorkloadTask(env, &workload, taskQueue)
 		}
 	})
 
 	buttonClose := widget.NewButton("关闭", func() {
-		log.Printf("[buttonClose] Clicked, gEnvironment=%v", operations.GetEnvironment() != nil)
-
 		env := operations.GetEnvironment()
 		infoArea := operations.GetInfoArea()
 		taskQueue := operations.GetTaskQueue()
@@ -325,17 +295,7 @@ func InitView() fyne.Window {
 		log.Printf("[buttonClose] Processing %d workloads", len(workloadsToProcess))
 
 		for _, workload := range workloadsToProcess {
-			newTask := &rancher.Task{
-				Type:        rancher.TaskTypeScaleClose,
-				Description: fmt.Sprintf("关闭 %s", workload.Name),
-				Environment: *env,
-				Namespace:   workload.Namespace,
-				Workload:    workload.Name,
-				Replicas:    0,
-			}
-			taskID := taskQueue.AddTask(newTask)
-			log.Printf("[buttonClose] Task added: ID=%d, Description=%s", taskID, newTask.Description)
-			taskQueue.Submit(newTask)
+			operations.CloseWorkloadTask(env, &workload, taskQueue)
 		}
 	})
 
@@ -360,16 +320,7 @@ func InitView() fyne.Window {
 		log.Printf("[buttonRedeploy] Processing %d workloads", len(workloadsToProcess))
 
 		for _, workload := range workloadsToProcess {
-			newTask := &rancher.Task{
-				Type:        rancher.TaskTypeRedeploy,
-				Description: fmt.Sprintf("重新部署 %s", workload.Name),
-				Environment: *env,
-				Namespace:   workload.Namespace,
-				Workload:    workload.Name,
-			}
-			taskID := taskQueue.AddTask(newTask)
-			log.Printf("[buttonRedeploy] Task added: ID=%d, Description=%s", taskID, newTask.Description)
-			taskQueue.Submit(newTask)
+			operations.RedeployWorkloadTask(env, &workload, taskQueue)
 		}
 	})
 
