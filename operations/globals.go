@@ -2,6 +2,7 @@ package operations
 
 import (
 	"fmt"
+	"log"
 	"strconv"
 
 	"RancherMan/rancher"
@@ -269,7 +270,7 @@ func InitData() {
 	gNamespaces = append(namespaces)
 	gFilteredNamespaces = append(gNamespaces)
 	gSelectedNamespace = rancher.Namespace{}
-	fmt.Printf("初始化数据完成，共有命名空间 %d 个\n", len(gNamespaces))
+	log.Printf("[InitData] 初始化数据完成，共有命名空间 %d 个\n", len(gNamespaces))
 
 	if gNamespaceList != nil {
 		gNamespaceList.UnselectAll()

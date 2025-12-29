@@ -32,9 +32,9 @@ func NewTaskStatusBar(onCancel func()) *TaskStatusBar {
 	// === 左侧内容 ===
 	left := container.NewHBox(
 		statusLabel,
-		dotsLabel,
 		widget.NewSeparator(),
 		taskInfoLabel,
+		dotsLabel,
 	)
 
 	// === 右侧内容（始终靠右） ===

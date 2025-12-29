@@ -58,23 +58,10 @@ func (t *taskQueueUI) UpdateStatus(status string, dots string, current int, tota
 }
 
 func (t *taskQueueUI) OnTaskComplete(task *rancher.Task, result rancher.TaskResult) {
-	log.Printf("[OnTaskComplete] task=%s success=%v", task.Description, result.Success)
+	log.Printf("[OnTaskComplete] task=%s type = %i success=%v", task.Description, task.Type, result.Success)
 	switch task.Type {
-	case rancher.TaskTypeUpdateData:
-	case rancher.TaskTypeClearData:
+	case rancher.TaskTypeUpdateData, rancher.TaskTypeClearData:
 		operations.InitData()
-		break
 	}
-	//info := "任务完成: " + task.Description + " - "
-	//if result.Success {
-	//	info += "成功\n"
-	//} else {
-	//	info += "失败: " + result.Error.Error() + "\n"
-	//}
-	//
-	//// 追加到现有文本末尾，然后调用 updateInfoArea 刷新显示
-	//infoArea := operations.GetInfoArea()
-	//currentText := infoArea.Text
-	//infoArea.SetText(currentText + info)
-	//operations.UpdateInfoArea()
+	operations.UpdateInfoArea()
 }
