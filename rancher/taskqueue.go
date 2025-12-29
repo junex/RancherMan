@@ -273,11 +273,13 @@ func (tq *TaskQueue) executeTask(task *Task) {
 
 	case TaskTypeUpdateData:
 		log.Printf("[executeTask] Executing UpdateData for environment %s", task.Environment.Name)
-		result.Success = UpdateEnvironmentData(task.DB, task.Environment.ID, &task.Environment, tq.ui)
+		UpdateEnvironment(task.DB, task.Environment.Name, &task.Environment, true)
+		result.Success = true
 
 	case TaskTypeUpdatePortMap:
 		log.Printf("[executeTask] Executing UpdatePortMap for environment %s", task.Environment.Name)
-		result.Success = UpdateServiceData(task.DB, task.Environment.ID, &task.Environment, tq.ui)
+		UpdateService(task.DB, task.Environment.Name, &task.Environment)
+		result.Success = true
 
 	case TaskTypeScanJumpHost:
 		log.Printf("[executeTask] Executing ScanJumpHost")

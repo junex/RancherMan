@@ -58,7 +58,7 @@ func (t *taskQueueUI) UpdateStatus(status string, dots string, current int, tota
 }
 
 func (t *taskQueueUI) OnTaskComplete(task *rancher.Task, result rancher.TaskResult) {
-	log.Printf("[OnTaskComplete] task=%s type = %i success=%v", task.Description, task.Type, result.Success)
+	log.Printf("[OnTaskComplete] task=%s type = %d success=%v", task.Description, task.Type, result.Success)
 	switch task.Type {
 	case rancher.TaskTypeUpdateData, rancher.TaskTypeClearData:
 		operations.InitData()
