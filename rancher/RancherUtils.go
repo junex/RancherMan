@@ -68,7 +68,7 @@ func UpdateEnvironment(db *DatabaseManager, envName string, environment *Environ
 		for _, namespace := range namespaceList {
 			namespaceDBList = append(namespaceDBList, Namespace{
 				Name:        namespace.Name,
-				Environment: envName,
+				Environment: environment.ID,
 				Project:     namespace.ProjectId,
 				Description: namespace.Description,
 			})
@@ -107,7 +107,7 @@ func UpdateEnvironment(db *DatabaseManager, envName string, environment *Environ
 
 			accessPath := LookupService(lookupDict, workload.Name, workload.NamespaceID)
 			workloadsDBList = append(workloadsDBList, Workload{
-				Environment:          envName,
+				Environment:          environment.ID,
 				Namespace:            workload.NamespaceID,
 				ProjectId:            workload.ProjectID,
 				Name:                 workload.Name,
@@ -194,45 +194,34 @@ func UpdatePod(db *DatabaseManager, envName string, environment *Environment) {
 }
 
 // UpdateEnvironmentData 更新环境数据（支持多环境）
-func UpdateEnvironmentData(db *DatabaseManager, envID string, env *Environment, taskQueueUI interface{UpdateStatus(string, string, int, int, string)}) bool {
-	config, _ := LoadConfigFromDb(db)
-	totalEnvs := 0
+func UpdateEnvironmentData(db *DatabaseManager, envID string, env *Environment, taskQueueUI interface {
+	UpdateStatus(string, string, int, int, string)
+}) bool {
+	totalEnvs := 1
 	completedEnvs := 0
 
-	// 获取所有环境数量
-	if env == nil {
-		for _, _ = range config["environment"].(map[interface{}]interface{}) {
-			totalEnvs++
-		}
-	} else {
-		totalEnvs = 1
+	// 更新进度
+	completedEnvs++
+	if taskQueueUI != nil {
+		taskQueueUI.UpdateStatus(
+			"更新数据",
+			".",
+			completedEnvs,
+			totalEnvs,
+			fmt.Sprintf("环境 %s", env.Name),
+		)
 	}
 
-	// 更新每个环境
-	for envName, _ := range config["environment"].(map[interface{}]interface{}) {
-		environment, _ := GetEnvironmentFromConfig(config, envName.(string))
-
-		// 更新进度
-		completedEnvs++
-		if taskQueueUI != nil {
-			taskQueueUI.UpdateStatus(
-				"更新数据",
-				".",
-				completedEnvs,
-				totalEnvs,
-				fmt.Sprintf("环境 %s", environment.Name),
-			)
-		}
-
-		// 执行更新
-		UpdateEnvironment(db, environment.Name, environment, true)
-	}
+	// 执行更新
+	UpdateEnvironment(db, env.Name, env, true)
 
 	return true
 }
 
 // UpdateServiceData 更新服务数据（支持多环境）
-func UpdateServiceData(db *DatabaseManager, envID string, env *Environment, taskQueueUI interface{UpdateStatus(string, string, int, int, string)}) bool {
+func UpdateServiceData(db *DatabaseManager, envID string, env *Environment, taskQueueUI interface {
+	UpdateStatus(string, string, int, int, string)
+}) bool {
 	config, _ := LoadConfigFromDb(db)
 	totalEnvs := 0
 	completedEnvs := 0

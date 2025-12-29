@@ -4,34 +4,34 @@ import (
 	"fmt"
 	"strconv"
 
-	"fyne.io/fyne/v2"
-	"fyne.io/fyne/v2/widget"
 	"RancherMan/rancher"
 	"RancherMan/ui/component"
+	"fyne.io/fyne/v2"
+	"fyne.io/fyne/v2/widget"
 )
 
 // 全局变量，由main包设置
 var (
-	gDb                       *rancher.DatabaseManager
-	gConfig                   map[string]interface{}
-	gEnvironment              *rancher.Environment
-	gJumpHostConfig           *rancher.JumpHostConfig
-	gCloneIgnoreTagWorkload   []string
-	gTaskQueue                *rancher.TaskQueue
-	gNamespaces               []rancher.Namespace
-	gFilteredNamespaces       []rancher.Namespace
-	gSelectedNamespace        rancher.Namespace
-	gWorkloads                []rancher.Workload
-	gFilteredWorkloads        []rancher.Workload
-	gSelectedWorkloads        []rancher.Workload
-	gNamespaceList            *widget.List
-	gNamespaceSearch          *widget.Entry
-	gWorkloadList             *component.MultiSelectList
-	gWorkloadSearch           *widget.Entry
-	gInfoArea                 *widget.Entry
-	gApp                      fyne.App
-	gTaskStatusBar            *component.TaskStatusBar
-	gOperationButtons         []*widget.Button
+	gDb                     *rancher.DatabaseManager
+	gConfig                 map[string]interface{}
+	gEnvironment            *rancher.Environment
+	gJumpHostConfig         *rancher.JumpHostConfig
+	gCloneIgnoreTagWorkload []string
+	gTaskQueue              *rancher.TaskQueue
+	gNamespaces             []rancher.Namespace
+	gFilteredNamespaces     []rancher.Namespace
+	gSelectedNamespace      rancher.Namespace
+	gWorkloads              []rancher.Workload
+	gFilteredWorkloads      []rancher.Workload
+	gSelectedWorkloads      []rancher.Workload
+	gNamespaceList          *widget.List
+	gNamespaceSearch        *widget.Entry
+	gWorkloadList           *component.MultiSelectList
+	gWorkloadSearch         *widget.Entry
+	gInfoArea               *widget.Entry
+	gApp                    fyne.App
+	gTaskStatusBar          *component.TaskStatusBar
+	gOperationButtons       []*widget.Button
 )
 
 // SetDb 设置数据库管理器
@@ -269,6 +269,7 @@ func InitData() {
 	gNamespaces = append(namespaces)
 	gFilteredNamespaces = append(gNamespaces)
 	gSelectedNamespace = rancher.Namespace{}
+	fmt.Printf("初始化数据完成，共有命名空间 %d 个\n", len(gNamespaces))
 
 	if gNamespaceList != nil {
 		gNamespaceList.UnselectAll()

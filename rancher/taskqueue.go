@@ -20,7 +20,7 @@ const (
 	TaskTypeScanJumpHost    // 新增：扫描跳板机配置
 	TaskTypeGetJumpHostInfo // 新增：获取目录跳板机信息
 	TaskTypeUpdateJumpHost  // 新增：更新跳板机数据库
-	TaskTypeClearData      // 新增：清空数据
+	TaskTypeClearData       // 新增：清空数据
 )
 
 // TaskStatus 定义任务状态
@@ -139,7 +139,6 @@ func (tq *TaskQueue) GetTaskCount() (current, total int) {
 	defer tq.mu.Unlock()
 
 	total = len(tq.tasks)
-	current = 0
 
 	completedCount := 0
 	for _, t := range tq.tasks {
@@ -148,10 +147,12 @@ func (tq *TaskQueue) GetTaskCount() (current, total int) {
 		}
 	}
 
-	if completedCount > 0 {
+	// 如果有正在执行的任务，current = 已完成数 + 1
+	// 否则 current = 已完成数
+	if tq.currentTask != nil && (tq.currentTask.Status == TaskStatusRunning) {
+		current = completedCount + 1
+	} else {
 		current = completedCount
-	} else if tq.currentTask != nil {
-		current = 1
 	}
 
 	return current, total
@@ -227,7 +228,7 @@ func (tq *TaskQueue) Start(ui TaskQueueUI) {
 				return
 			case task := <-tq.taskChan:
 				log.Printf("[TaskQueue] Received task from channel: ID=%d, Description=%s", task.ID, task.Description)
-				go tq.executeTask(task)
+				tq.executeTask(task)
 			}
 		}
 	}()
@@ -307,8 +308,24 @@ func (tq *TaskQueue) executeTask(task *Task) {
 		task.Error = result.Error
 	}
 	tq.currentTask = nil
+	// 1. 判断是否全部完成
+	allDone := !tq.hasUnfinishedTasks()
+
+	// 2. 如果全部完成，清空队列
+	if allDone {
+		tq.tasks = make([]*Task, 0)
+	}
 	tq.mu.Unlock()
 
 	log.Printf("[executeTask] Task completed: ID=%d, Success=%v", task.ID, result.Success)
 	tq.ui.OnTaskComplete(task, result)
+}
+
+func (tq *TaskQueue) hasUnfinishedTasks() bool {
+	for _, t := range tq.tasks {
+		if t.Status == TaskStatusPending || t.Status == TaskStatusRunning {
+			return true
+		}
+	}
+	return false
 }
