@@ -22,6 +22,7 @@ const (
 	TaskTypeUpdatePortMap  // 新增：更新端口映射
 	TaskTypeUpdateJumpHost // 新增：扫描跳板机配置
 	TaskTypeClearData      // 新增：清空数据
+	TaskTypeDelay          // 新增：延时等待
 )
 
 // TaskStatus 定义任务状态
@@ -46,6 +47,7 @@ type Task struct {
 	Namespace      string
 	Workload       string
 	Replicas       int
+	DelayMs        int // 新增：延时毫秒数
 	Error          error
 	DB             *DatabaseManager
 	JumpHostConfig *JumpHostConfig
@@ -119,13 +121,8 @@ func (tq *TaskQueue) AddTask(task *Task) int {
 
 	tq.tasks = append(tq.tasks, task)
 	log.Printf("[AddTask] Task ID=%d, Type=%d, Description=%s", task.ID, task.Type, task.Description)
-
-	return task.ID
-}
-
-// Submit 提交任务到执行队列
-func (tq *TaskQueue) Submit(task *Task) {
 	tq.taskChan <- task
+	return task.ID
 }
 
 // CancelAll 取消所有任务
@@ -340,6 +337,19 @@ func (tq *TaskQueue) executeTask(task *Task) {
 		err := task.DB.ClearAllData()
 		result.Success = err == nil
 		result.Error = err
+
+	case TaskTypeDelay:
+		log.Printf("[executeTask] Executing Delay for %d milliseconds", task.DelayMs)
+		timer := time.NewTimer(time.Duration(task.DelayMs) * time.Millisecond)
+		select {
+		case <-task.ctx.Done():
+			timer.Stop()
+			result.Success = false
+			result.Error = fmt.Errorf("延时任务已取消")
+		case <-timer.C:
+			result.Success = true
+			result.Error = nil
+		}
 	}
 
 	tq.mu.Lock()

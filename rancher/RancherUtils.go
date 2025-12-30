@@ -98,7 +98,6 @@ func UpdateEnvironment(ctx context.Context, db *DatabaseManager, environment *En
 	if update {
 		// 更新namespace
 		var namespaceDBList []Namespace
-		db.DeleteNamespaceByEnvironment(environment.ID)
 		allNamespaces, err := GetNamespaceList(ctx, *environment)
 		if err != nil {
 			return err
@@ -117,9 +116,9 @@ func UpdateEnvironment(ctx context.Context, db *DatabaseManager, environment *En
 				Description: namespace.Description,
 			})
 		}
+		db.DeleteNamespaceByEnvironment(environment.ID)
 		db.InsertNamespaces(namespaceDBList)
 		// 更新workload
-		db.DeleteWorkloadByEnv(environment.ID)
 		// Get nginx reverse proxy list
 		var nginxProxyList []ConfigEntry
 		for _, nginxConfig := range environment.nginxList {
@@ -168,14 +167,13 @@ func UpdateEnvironment(ctx context.Context, db *DatabaseManager, environment *En
 				Remark:               remark,
 			})
 		}
+		db.DeleteWorkloadByEnv(environment.ID)
 		db.InsertWorkloads(workloadsDBList)
 	}
 	return nil
 }
 
 func UpdateService(ctx context.Context, db *DatabaseManager, environment *Environment) error {
-	// 删除旧的pod数据
-	db.DeleteServiceByEnvironment(environment.ID)
 
 	// 获取所有pod
 	serviceList, err := GetServiceList(ctx, *environment)
@@ -208,6 +206,8 @@ func UpdateService(ctx context.Context, db *DatabaseManager, environment *Enviro
 		}
 	}
 
+	// 删除旧的pod数据
+	db.DeleteServiceByEnvironment(environment.ID)
 	// 插入新的pod数据
 	if err := db.InsertServices(servicesDBList); err != nil {
 		fmt.Printf("插入服务数据失败: %v\n", err)
@@ -217,9 +217,6 @@ func UpdateService(ctx context.Context, db *DatabaseManager, environment *Enviro
 }
 
 func UpdatePod(ctx context.Context, db *DatabaseManager, environment *Environment) error {
-	// 删除旧的pod数据
-	db.DeletePodByEnvironment(environment.ID)
-
 	// 获取所有pod
 	podList, err := GetPodList(ctx, *environment)
 	if err != nil {
@@ -238,6 +235,8 @@ func UpdatePod(ctx context.Context, db *DatabaseManager, environment *Environmen
 		})
 	}
 
+	// 删除旧的pod数据
+	db.DeletePodByEnvironment(environment.ID)
 	// 插入新的pod数据
 	if err := db.InsertPods(podsDBList); err != nil {
 		fmt.Printf("插入Pod数据失败: %v\n", err)

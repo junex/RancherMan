@@ -17,7 +17,8 @@ import (
 // InitView 初始化应用程序界面
 func InitView() fyne.Window {
 	// 初始化界面
-	gApp = app.New()
+	gApp = app.NewWithID("com.junefan.rancherman")
+	preferences := gApp.Preferences()
 	myWindow := gApp.NewWindow("Rancher助手")
 
 	// 创建主菜单
@@ -241,7 +242,6 @@ func InitView() fyne.Window {
 		taskQueue := operations.GetTaskQueue()
 
 		if env != nil {
-			// 只更新当前选中的环境
 			operations.UpdatePodsTask(env, db, taskQueue)
 		} else {
 			log.Printf("[buttonUpdatePod] gEnvironment is nil, skipping")
@@ -250,6 +250,7 @@ func InitView() fyne.Window {
 
 	buttonOpen := widget.NewButton("打开", func() {
 		env := operations.GetEnvironment()
+		db := operations.GetDb()
 		infoArea := operations.GetInfoArea()
 		taskQueue := operations.GetTaskQueue()
 
@@ -266,13 +267,12 @@ func InitView() fyne.Window {
 		}
 
 		log.Printf("[buttonOpen] Processing %d workloads", len(workloadsToProcess))
-		for _, workload := range workloadsToProcess {
-			operations.OpenWorkloadTask(env, &workload, taskQueue)
-		}
+		operations.OpenWorkloadTask(env, db, workloadsToProcess, taskQueue)
 	})
 
 	buttonClose := widget.NewButton("关闭", func() {
 		env := operations.GetEnvironment()
+		db := operations.GetDb()
 		infoArea := operations.GetInfoArea()
 		taskQueue := operations.GetTaskQueue()
 
@@ -289,15 +289,14 @@ func InitView() fyne.Window {
 
 		log.Printf("[buttonClose] Processing %d workloads", len(workloadsToProcess))
 
-		for _, workload := range workloadsToProcess {
-			operations.CloseWorkloadTask(env, &workload, taskQueue)
-		}
+		operations.CloseWorkloadTask(env, db, workloadsToProcess, taskQueue)
 	})
 
 	buttonRedeploy := widget.NewButton("重新部署", func() {
 		log.Printf("[buttonRedeploy] Clicked, gEnvironment=%v", operations.GetEnvironment() != nil)
 
 		env := operations.GetEnvironment()
+		db := operations.GetDb()
 		infoArea := operations.GetInfoArea()
 		taskQueue := operations.GetTaskQueue()
 
@@ -314,9 +313,7 @@ func InitView() fyne.Window {
 
 		log.Printf("[buttonRedeploy] Processing %d workloads", len(workloadsToProcess))
 
-		for _, workload := range workloadsToProcess {
-			operations.RedeployWorkloadTask(env, &workload, taskQueue)
-		}
+		operations.RedeployWorkloadTask(env, db, workloadsToProcess, taskQueue)
 	})
 
 	// 创建任务状态栏
@@ -372,12 +369,24 @@ func InitView() fyne.Window {
 
 	// 上半部分：左边是两列，右边是 InfoArea
 	topContent := container.NewBorder(nil, nil, leftPanel, nil, rightCol)
-
 	// 整体布局：上部是内容区，底部是任务栏（横跨整个窗口）
 	content := container.NewBorder(nil, gTaskStatusBar.GetContainer(), nil, nil, topContent)
 	myWindow.SetContent(content)
-	// 设置窗口初始大小
-	myWindow.Resize(fyne.NewSize(1050, 600))
+
+	// 设置窗口大小
+	width := preferences.Float("window_width")
+	height := preferences.Float("window_height")
+	if width > 0 && height > 0 {
+		myWindow.Resize(fyne.NewSize(float32(width), float32(height)))
+	} else {
+		// 第一次启动的默认大小
+		myWindow.Resize(fyne.NewSize(1050, 600))
+	}
+	myWindow.SetOnClosed(func() {
+		size := myWindow.Canvas().Size()
+		preferences.SetFloat("window_width", float64(size.Width))
+		preferences.SetFloat("window_height", float64(size.Height))
+	})
 
 	// 将其他UI组件设置到operations包
 	operations.SetNamespaceList(gNamespaceList)

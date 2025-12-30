@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"sort"
 	"strings"
 
 	"RancherMan/rancher"
@@ -202,10 +203,9 @@ func UpdateDataTask(env *rancher.Environment, db *rancher.DatabaseManager, taskQ
 		Environment: *env,
 		DB:          db,
 	}
-	taskID := taskQueue.AddTask(newTask)
-	log.Printf("[UpdateDataTask] Task added: ID=%d, Description=%s", taskID, newTask.Description)
-	taskQueue.Submit(newTask)
+	taskQueue.AddTask(newTask)
 	UpdatePortMapTask(env, db, taskQueue)
+	DelayTask("更新数据后", 500, taskQueue)
 	UpdatePodsTask(env, db, taskQueue)
 }
 
@@ -215,9 +215,7 @@ func UpdateDataCompleteTask(taskQueue *rancher.TaskQueue) {
 		Description:  fmt.Sprintf("更新数据完成"),
 		UnCancelable: true,
 	}
-	taskID := taskQueue.AddTask(newTask)
-	log.Printf("[UpdateDataCompleteTask] Task added: ID=%d, Description=%s", taskID, newTask.Description)
-	taskQueue.Submit(newTask)
+	taskQueue.AddTask(newTask)
 }
 
 // UpdatePortMapTask 创建更新端口映射任务
@@ -233,9 +231,7 @@ func UpdatePortMapTask(env *rancher.Environment, db *rancher.DatabaseManager, ta
 		Environment: *env,
 		DB:          db,
 	}
-	taskID := taskQueue.AddTask(newTask)
-	log.Printf("[UpdatePortMapTask] Task added: ID=%d, Description=%s", taskID, newTask.Description)
-	taskQueue.Submit(newTask)
+	taskQueue.AddTask(newTask)
 }
 
 // ClearDataTask 创建清空数据任务
@@ -245,9 +241,7 @@ func ClearDataTask(db *rancher.DatabaseManager, taskQueue *rancher.TaskQueue) {
 		Description: "清空数据",
 		DB:          db,
 	}
-	taskID := taskQueue.AddTask(newTask)
-	log.Printf("[ClearDataTask] Task added: ID=%d, Description=%s", taskID, newTask.Description)
-	taskQueue.Submit(newTask)
+	taskQueue.AddTask(newTask)
 }
 
 func UpdatePodsTask(env *rancher.Environment, db *rancher.DatabaseManager, taskQueue *rancher.TaskQueue) {
@@ -261,52 +255,136 @@ func UpdatePodsTask(env *rancher.Environment, db *rancher.DatabaseManager, taskQ
 		Environment: *env,
 		DB:          db,
 	}
-	taskID := taskQueue.AddTask(newTask)
-	log.Printf("[UpdatePodsTask] Task added: ID=%d, Description=%s", taskID, newTask.Description)
-	taskQueue.Submit(newTask)
+	taskQueue.AddTask(newTask)
 }
 
-func OpenWorkloadTask(env *rancher.Environment, workload *rancher.Workload, taskQueue *rancher.TaskQueue) {
-	log.Printf("[OpenWorkloadTask] Creating task for workload: %s", workload.Name)
-	newTask := &rancher.Task{
-		Type:        rancher.TaskTypeScaleOpen,
-		Description: fmt.Sprintf("打开 %s", workload.Name),
-		Environment: *env,
-		Namespace:   workload.Namespace,
-		Workload:    workload.Name,
-		Replicas:    1,
+func OpenWorkloadTask(env *rancher.Environment, db *rancher.DatabaseManager, workloads []rancher.Workload, taskQueue *rancher.TaskQueue) {
+	SortWorkloadsByPriority(workloads, SortAsc)
+	for i := range workloads {
+		fmt.Printf("正在处理 %s\n", workloads[i].Name)
 	}
-	log.Printf("[OpenWorkloadTask] About to call AddTask...")
-	taskID := taskQueue.AddTask(newTask)
-	log.Printf("[OpenWorkloadTask] Task added: ID=%d, Description=%s", taskID, newTask.Description)
-	taskQueue.Submit(newTask)
+	for i, workload := range workloads {
+		newTask := &rancher.Task{
+			Type:        rancher.TaskTypeScaleOpen,
+			Description: fmt.Sprintf("打开 %s", workload.Name),
+			Environment: *env,
+			Namespace:   workload.Namespace,
+			Workload:    workload.Name,
+			Replicas:    1,
+		}
+		taskQueue.AddTask(newTask)
+		_, delayMs := workloadPriority(workload.Name)
+		if i < len(workloads)-1 {
+			DelayTask(newTask.Description+"后", delayMs, taskQueue)
+		}
+	}
+	DelayTask("打开服务后", 500, taskQueue)
+	UpdatePodsTask(env, db, taskQueue)
 }
 
-func CloseWorkloadTask(env *rancher.Environment, workload *rancher.Workload, taskQueue *rancher.TaskQueue) {
-	log.Printf("[CloseWorkloadTask] Creating task for workload: %s", workload.Name)
-	newTask := &rancher.Task{
-		Type:        rancher.TaskTypeScaleClose,
-		Description: fmt.Sprintf("关闭 %s", workload.Name),
-		Environment: *env,
-		Namespace:   workload.Namespace,
-		Workload:    workload.Name,
-		Replicas:    0,
+func CloseWorkloadTask(env *rancher.Environment, db *rancher.DatabaseManager, workloads []rancher.Workload, taskQueue *rancher.TaskQueue) {
+	SortWorkloadsByPriority(workloads, SortDesc)
+	for _, workload := range workloads {
+		newTask := &rancher.Task{
+			Type:        rancher.TaskTypeScaleClose,
+			Description: fmt.Sprintf("关闭 %s", workload.Name),
+			Environment: *env,
+			Namespace:   workload.Namespace,
+			Workload:    workload.Name,
+			Replicas:    0,
+		}
+		taskQueue.AddTask(newTask)
 	}
-	taskID := taskQueue.AddTask(newTask)
-	log.Printf("[CloseWorkloadTask] Task added: ID=%d, Description=%s", taskID, newTask.Description)
-	taskQueue.Submit(newTask)
+	DelayTask("关闭服务后", 500, taskQueue)
+	UpdatePodsTask(env, db, taskQueue)
 }
 
-func RedeployWorkloadTask(env *rancher.Environment, workload *rancher.Workload, taskQueue *rancher.TaskQueue) {
-	log.Printf("[RedeployWorkloadTask] Creating task for workload: %s", workload.Name)
-	newTask := &rancher.Task{
-		Type:        rancher.TaskTypeRedeploy,
-		Description: fmt.Sprintf("重新部署 %s", workload.Name),
-		Environment: *env,
-		Namespace:   workload.Namespace,
-		Workload:    workload.Name,
+func RedeployWorkloadTask(env *rancher.Environment, db *rancher.DatabaseManager, workloads []rancher.Workload, taskQueue *rancher.TaskQueue) {
+	SortWorkloadsByPriority(workloads, SortAsc)
+	for i, workload := range workloads {
+		newTask := &rancher.Task{
+			Type:        rancher.TaskTypeRedeploy,
+			Description: fmt.Sprintf("重新部署 %s", workload.Name),
+			Environment: *env,
+			Namespace:   workload.Namespace,
+			Workload:    workload.Name,
+		}
+		taskQueue.AddTask(newTask)
+		_, delayMs := workloadPriority(workload.Name)
+		if i < len(workloads)-1 {
+			DelayTask(newTask.Description+"后", delayMs, taskQueue)
+		}
 	}
-	taskID := taskQueue.AddTask(newTask)
-	log.Printf("[RedeployWorkloadTask] Task added: ID=%d, Description=%s", taskID, newTask.Description)
-	taskQueue.Submit(newTask)
+	DelayTask("重新部署服务后", 500, taskQueue)
+	UpdatePodsTask(env, db, taskQueue)
+}
+
+func DelayTask(reason string, delayMs int, taskQueue *rancher.TaskQueue) {
+	if delayMs > 0 {
+		newTask := &rancher.Task{
+			Type:        rancher.TaskTypeDelay,
+			DelayMs:     delayMs,
+			Description: fmt.Sprintf("%s 等待 %.1f 秒", reason, float32(delayMs)/float32(1000)),
+		}
+		taskQueue.AddTask(newTask)
+	}
+}
+
+type SortOrder int
+
+const (
+	SortAsc  SortOrder = iota // 升序
+	SortDesc                  // 降序
+)
+
+func SortWorkloadsByPriority(
+	workloads []rancher.Workload,
+	order SortOrder,
+) {
+	sort.SliceStable(workloads, func(i, j int) bool {
+		pi, _ := workloadPriority(workloads[i].Name)
+		pj, _ := workloadPriority(workloads[j].Name)
+
+		// 先按优先级
+		if pi != pj {
+			if order == SortAsc {
+				return pi < pj
+			}
+			return pi > pj
+		}
+
+		// 同优先级按名称
+		if order == SortAsc {
+			return workloads[i].Name < workloads[j].Name
+		}
+		return workloads[i].Name > workloads[j].Name
+	})
+	for i := range workloads {
+		fmt.Printf("已处理 %s\n", workloads[i].Name)
+	}
+}
+
+var workloadRules = []struct {
+	priority int
+	keywords []string
+	delayMs  int
+}{
+	// 这个顺序是为了最后匹配数据库，防止错误匹配
+	{priority: 2, keywords: []string{"redis", "mongo", "elasticsearch", "rabbitmq", "kafka", "minio"}, delayMs: 1000},
+	{priority: 3, keywords: []string{"web-"}, delayMs: 100},
+	{priority: 4, keywords: []string{"-portal", "-api", "xxl-job"}, delayMs: 3000},
+	{priority: 1, keywords: []string{"mysql", "dm", "kingbase"}, delayMs: 10000},
+}
+
+func workloadPriority(name string) (int, int) {
+	name = strings.ToLower(name)
+
+	for _, rule := range workloadRules {
+		for _, kw := range rule.keywords {
+			if strings.Contains(name, kw) {
+				return rule.priority, rule.delayMs
+			}
+		}
+	}
+	return 100, 0
 }

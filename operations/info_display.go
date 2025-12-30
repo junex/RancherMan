@@ -42,8 +42,15 @@ func updateInfoAreaForSelectNamespace() {
 		podStates[workloadName] = append(podStates[workloadName], pod.State)
 	}
 
-	// 打印每个workload的pod状态
-	for workloadName, states := range podStates {
+	keys := make([]string, 0, len(podStates))
+	for k := range podStates {
+		keys = append(keys, k)
+	}
+
+	sort.Strings(keys)
+
+	for _, workloadName := range keys {
+		states := podStates[workloadName]
 		info.WriteString(fmt.Sprintf("%s: %s\n", workloadName, strings.Join(states, ",")))
 	}
 	gInfoArea.SetText(info.String())

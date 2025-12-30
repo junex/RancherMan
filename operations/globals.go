@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"strconv"
+	"time"
 
 	"RancherMan/rancher"
 	"RancherMan/ui/component"
@@ -268,26 +269,31 @@ func LoadConfig(showSuccessTip bool) {
 func InitData() {
 	namespaces, _ := gDb.GetAllNamespacesDetail()
 	gNamespaces = append(namespaces)
-	gFilteredNamespaces = append(gNamespaces)
-	gSelectedNamespace = rancher.Namespace{}
+	gFilteredNamespaces = append(FilterNamespaces(gNamespaces, gNamespaceSearch.Text))
 	log.Printf("[InitData] 初始化数据完成，共有命名空间 %d 个\n", len(gNamespaces))
 
+	selectIndex := -1
+	for i := range gFilteredNamespaces {
+		namespace := gFilteredNamespaces[i]
+		if gSelectedNamespace.Name == namespace.Name && gSelectedNamespace.Environment == namespace.Environment {
+			selectIndex = i
+			break
+		}
+	}
+	if selectIndex < 0 {
+		gSelectedNamespace = rancher.Namespace{}
+	}
+
 	if gNamespaceList != nil {
-		gNamespaceList.UnselectAll()
-		gNamespaceList.ScrollToTop()
-		gNamespaceList.Refresh()
-	}
-	if gNamespaceSearch != nil {
-		gNamespaceSearch.SetText("")
-	}
-
-	gWorkloads = []rancher.Workload{}
-	gFilteredWorkloads = []rancher.Workload{}
-
-	if gWorkloadList != nil {
-		gWorkloadList.RefreshList()
-	}
-	if gWorkloadSearch != nil {
-		gWorkloadSearch.SetText("")
+		if selectIndex < 0 {
+			gNamespaceList.UnselectAll()
+			gNamespaceList.ScrollToTop()
+			gNamespaceList.Refresh()
+		} else {
+			time.AfterFunc(time.Millisecond*20, func() {
+				gNamespaceList.Select(selectIndex)
+			})
+			gNamespaceList.Refresh()
+		}
 	}
 }

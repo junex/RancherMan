@@ -1,8 +1,6 @@
 package operations
 
 import (
-	"log"
-
 	"RancherMan/rancher"
 )
 
@@ -14,7 +12,5 @@ func UpdateJumpHostTask(db *rancher.DatabaseManager, config *rancher.JumpHostCon
 		DB:             db,
 		JumpHostConfig: config,
 	}
-	taskID := taskQueue.AddTask(newTask)
-	log.Printf("[UpdateJumpHostTask] Task added: ID=%d, Description=%s", taskID, newTask.Description)
-	taskQueue.Submit(newTask)
+	taskQueue.AddTask(newTask)
 }
