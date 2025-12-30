@@ -27,7 +27,6 @@ func InitView() fyne.Window {
 				var content = operations.GetInfoArea().Text
 				rancher.SaveConfigToDb(operations.GetDb(), content)
 				operations.LoadConfig(true)
-				operations.InitData()
 			}),
 			fyne.NewMenuItem("显示配置", func() {
 				configContent, _ := operations.GetDb().GetConfigContent(1)
@@ -51,7 +50,7 @@ func InitView() fyne.Window {
 						operations.UpdateDataTask(environment, db, taskQueue)
 					}
 				}
-				operations.InitData()
+				operations.UpdateDataCompleteTask(taskQueue)
 			}),
 			fyne.NewMenuItem("更新端口映射", func() {
 				env := operations.GetEnvironment()
@@ -86,7 +85,6 @@ func InitView() fyne.Window {
 				db := operations.GetDb()
 				taskQueue := operations.GetTaskQueue()
 				operations.ClearDataTask(db, taskQueue)
-				operations.InitData()
 			}),
 		),
 		fyne.NewMenu("克隆和导出",

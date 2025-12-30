@@ -1,9 +1,12 @@
 package rancher
 
 import (
+	"context"
 	"fmt"
+	"net"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"golang.org/x/crypto/ssh"
 )
@@ -30,37 +33,60 @@ type ProgressListener interface {
 	OnComplete()
 }
 
-func connectToJumpHost(config *JumpHostConfig) (*ssh.Client, error) {
+func connectToJumpHost(ctx context.Context, config *JumpHostConfig) (*ssh.Client, error) {
+	// 1️⃣ context 兜底（防 panic）
+	if ctx == nil {
+		ctx = context.Background()
+	}
+
 	sshConfig := &ssh.ClientConfig{
 		User: config.Username,
 		Auth: []ssh.AuthMethod{
 			ssh.Password(config.Password),
 		},
 		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
+
+		// ⭐ 强烈建议加超时（双保险）
+		Timeout: 5 * time.Second,
 	}
 
 	addr := fmt.Sprintf("%s:%s", config.Ip, config.Port)
-	client, err := ssh.Dial("tcp", addr, sshConfig)
+
+	var d net.Dialer
+	conn, err := d.DialContext(ctx, "tcp", addr)
 	if err != nil {
-		return nil, fmt.Errorf("无法连接到跳板机: %v", err)
+		return nil, fmt.Errorf("无法连接到跳板机(TCP): %w", err)
 	}
+
+	c, chans, reqs, err := ssh.NewClientConn(conn, addr, sshConfig)
+	if err != nil {
+		conn.Close()
+		return nil, fmt.Errorf("SSH 握手失败: %w", err)
+	}
+
+	client := ssh.NewClient(c, chans, reqs)
+
+	go func() {
+		<-ctx.Done()
+		client.Close()
+	}()
 
 	return client, nil
 }
 
-func ListUploadConfig(jumpHostConfig *JumpHostConfig, batchSize int, listener ProgressListener) {
+func ListUploadConfig(ctx context.Context, jumpHostConfig *JumpHostConfig, batchSize int, listener ProgressListener) (bool, error) {
 	// 连接到跳板机
-	client, err := connectToJumpHost(jumpHostConfig)
+	client, err := connectToJumpHost(ctx, jumpHostConfig)
 	if err != nil {
 		fmt.Printf("连接跳板机失败: %v\n", err)
-		return
+		return false, err
 	}
 	defer client.Close()
 
 	session, err := client.NewSession()
 	if err != nil {
 		fmt.Printf("创建SSH会话失败: %v\n", err)
-		return
+		return false, err
 	}
 	defer session.Close()
 
@@ -78,20 +104,20 @@ func ListUploadConfig(jumpHostConfig *JumpHostConfig, batchSize int, listener Pr
 	// 请求伪终端
 	if err := session.RequestPty("xterm", 80, 40, modes); err != nil {
 		fmt.Printf("请求PTY失败: %v\n", err)
-		return
+		return false, err
 	}
 
 	output, err := session.Output(cmd)
 	if err != nil && len(output) == 0 {
 		fmt.Printf("执行find命令失败: %v\n", err)
 		fmt.Printf("错误输出: %s\n", string(output))
-		return
+		return false, err
 	}
 
 	// 如果有输出，继续处理，不管是否有错误
 	if len(output) == 0 {
 		fmt.Println("命令执行成功但没有输出")
-		return
+		return false, nil
 	}
 
 	// 打印原始输出以便调试
@@ -117,6 +143,17 @@ func ListUploadConfig(jumpHostConfig *JumpHostConfig, batchSize int, listener Pr
 
 	// 遍历每个目录
 	for dir, fileList := range files {
+		select {
+		case <-ctx.Done():
+			if len(configs) > 0 && listener != nil {
+				listener.OnBatchResult(configs)
+			}
+			if listener != nil {
+				listener.OnComplete()
+			}
+			return false, ctx.Err()
+		default:
+		}
 		processedDirs++
 		if listener != nil {
 			listener.OnProgress(dir, processedDirs, totalDirs)
@@ -218,4 +255,5 @@ func ListUploadConfig(jumpHostConfig *JumpHostConfig, batchSize int, listener Pr
 	if listener != nil {
 		listener.OnComplete()
 	}
+	return true, nil
 }

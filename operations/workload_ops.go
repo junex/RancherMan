@@ -1,6 +1,7 @@
 package operations
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"os"
@@ -24,7 +25,7 @@ func CloneOrExportWorkload(isClone bool, destNamespace rancher.Namespace, tag st
 	processWorkloads := func(workloads []rancher.Workload) {
 		for _, workload := range workloads {
 			info.WriteString(fmt.Sprintf("获取deployment: %s    ", workload.Name))
-			deployment, err := rancher.GetDeploymentYaml(*gEnvironment, workload.Namespace, workload.Name)
+			deployment, err := rancher.GetDeploymentYaml(context.Background(), *gEnvironment, workload.Namespace, workload.Name)
 			if err == nil {
 				info.WriteString("成功!\n")
 				// 替换deployment名称中的namespace
@@ -84,7 +85,7 @@ func CloneOrExportWorkload(isClone bool, destNamespace rancher.Namespace, tag st
 				if isClone {
 					// 克隆模式：导入到Rancher
 					destEnvironment, _ := rancher.GetEnvironmentFromConfig(gConfig, destNamespace.Environment)
-					err := rancher.ImportYaml(*destEnvironment, "big-data", yamlData)
+					err := rancher.ImportYaml(context.Background(), *destEnvironment, "big-data", yamlData)
 					if err != nil {
 						info.WriteString("克隆失败!\n")
 					} else {
@@ -133,7 +134,7 @@ func CloneOrExportConfigMap(isClone bool, destNamespace rancher.Namespace) {
 
 	var info strings.Builder
 	var allYaml strings.Builder // 用于存储所有workload的YAML
-	list, err := rancher.GetConfigMapList(*gEnvironment, gSelectedNamespace.Name)
+	list, err := rancher.GetConfigMapList(context.Background(), *gEnvironment, gSelectedNamespace.Name)
 	if err != nil {
 		gInfoArea.SetText("获取配置时出错")
 		return
@@ -158,7 +159,7 @@ func CloneOrExportConfigMap(isClone bool, destNamespace rancher.Namespace) {
 		if isClone {
 			// 克隆模式：导入到Rancher
 			destEnvironment, _ := rancher.GetEnvironmentFromConfig(gConfig, destNamespace.Environment)
-			err := rancher.ImportYaml(*destEnvironment, "big-data", yamlData)
+			err := rancher.ImportYaml(context.Background(), *destEnvironment, "big-data", yamlData)
 			if err != nil {
 				info.WriteString("克隆失败!\n")
 			} else {
@@ -206,6 +207,17 @@ func UpdateDataTask(env *rancher.Environment, db *rancher.DatabaseManager, taskQ
 	taskQueue.Submit(newTask)
 	UpdatePortMapTask(env, db, taskQueue)
 	UpdatePodsTask(env, db, taskQueue)
+}
+
+func UpdateDataCompleteTask(taskQueue *rancher.TaskQueue) {
+	newTask := &rancher.Task{
+		Type:         rancher.TaskTypeUpdateDataComplete,
+		Description:  fmt.Sprintf("更新数据完成"),
+		UnCancelable: true,
+	}
+	taskID := taskQueue.AddTask(newTask)
+	log.Printf("[UpdateDataCompleteTask] Task added: ID=%d, Description=%s", taskID, newTask.Description)
+	taskQueue.Submit(newTask)
 }
 
 // UpdatePortMapTask 创建更新端口映射任务

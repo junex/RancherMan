@@ -23,6 +23,10 @@ func main() {
 
 	// 初始化UI
 	window := ui.InitView()
+	window.SetCloseIntercept(func() {
+		taskQueue.Stop()
+		window.Close()
+	})
 
 	// 加载配置
 	operations.LoadConfig(false)
@@ -60,7 +64,7 @@ func (t *taskQueueUI) UpdateStatus(status string, dots string, current int, tota
 func (t *taskQueueUI) OnTaskComplete(task *rancher.Task, result rancher.TaskResult) {
 	log.Printf("[OnTaskComplete] task=%s type = %d success=%v", task.Description, task.Type, result.Success)
 	switch task.Type {
-	case rancher.TaskTypeUpdateData, rancher.TaskTypeClearData:
+	case rancher.TaskTypeUpdateDataComplete, rancher.TaskTypeClearData:
 		operations.InitData()
 	}
 	operations.UpdateInfoArea()

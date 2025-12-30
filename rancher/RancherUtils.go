@@ -1,6 +1,7 @@
 package rancher
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"strings"
@@ -88,7 +89,7 @@ func SaveConfigToDb(db *DatabaseManager, content string) {
 	db.InsertConfig(1, content)
 }
 
-func UpdateEnvironment(db *DatabaseManager, environment *Environment, forceUpdate bool) {
+func UpdateEnvironment(ctx context.Context, db *DatabaseManager, environment *Environment, forceUpdate bool) error {
 	workloadCount, _ := db.GetWorkloadCountByEnvironment(environment.ID)
 	update := forceUpdate
 	if workloadCount == 0 {
@@ -98,7 +99,10 @@ func UpdateEnvironment(db *DatabaseManager, environment *Environment, forceUpdat
 		// 更新namespace
 		var namespaceDBList []Namespace
 		db.DeleteNamespaceByEnvironment(environment.ID)
-		allNamespaces, _ := GetNamespaceList(*environment)
+		allNamespaces, err := GetNamespaceList(ctx, *environment)
+		if err != nil {
+			return err
+		}
 		var namespaceList []NamespaceResp
 		for _, ns := range allNamespaces {
 			if ns.ProjectId == environment.Project {
@@ -119,13 +123,19 @@ func UpdateEnvironment(db *DatabaseManager, environment *Environment, forceUpdat
 		// Get nginx reverse proxy list
 		var nginxProxyList []ConfigEntry
 		for _, nginxConfig := range environment.nginxList {
-			nginxConf, _ := GetConfigMaps(*environment, nginxConfig.ConfPath)
+			nginxConf, err := GetConfigMaps(ctx, *environment, nginxConfig.ConfPath)
+			if err != nil {
+				return err
+			}
 
 			configList, _ := ParseNginxConfig(nginxConfig.BaseUrl, nginxConf)
 			nginxProxyList = append(nginxProxyList, configList...)
 		}
 		lookupDict := CreateLookupDict(nginxProxyList)
-		workloadList, _ := GetWorkloadList(*environment)
+		workloadList, err := GetWorkloadList(ctx, *environment)
+		if err != nil {
+			return err
+		}
 
 		var workloadsDBList []Workload
 		for _, workload := range workloadList {
@@ -160,17 +170,18 @@ func UpdateEnvironment(db *DatabaseManager, environment *Environment, forceUpdat
 		}
 		db.InsertWorkloads(workloadsDBList)
 	}
+	return nil
 }
 
-func UpdateService(db *DatabaseManager, environment *Environment) {
+func UpdateService(ctx context.Context, db *DatabaseManager, environment *Environment) error {
 	// 删除旧的pod数据
 	db.DeleteServiceByEnvironment(environment.ID)
 
 	// 获取所有pod
-	serviceList, err := GetServiceList(*environment)
+	serviceList, err := GetServiceList(ctx, *environment)
 	if err != nil {
 		fmt.Printf("获取服务列表失败: %v\n", err)
-		return
+		return err
 	}
 
 	var servicesDBList []Service
@@ -200,19 +211,20 @@ func UpdateService(db *DatabaseManager, environment *Environment) {
 	// 插入新的pod数据
 	if err := db.InsertServices(servicesDBList); err != nil {
 		fmt.Printf("插入服务数据失败: %v\n", err)
-		return
+		return err
 	}
+	return nil
 }
 
-func UpdatePod(db *DatabaseManager, environment *Environment) {
+func UpdatePod(ctx context.Context, db *DatabaseManager, environment *Environment) error {
 	// 删除旧的pod数据
 	db.DeletePodByEnvironment(environment.ID)
 
 	// 获取所有pod
-	podList, err := GetPodList(*environment)
+	podList, err := GetPodList(ctx, *environment)
 	if err != nil {
 		fmt.Printf("获取Pod列表失败: %v\n", err)
-		return
+		return err
 	}
 
 	var podsDBList []Pod
@@ -229,16 +241,16 @@ func UpdatePod(db *DatabaseManager, environment *Environment) {
 	// 插入新的pod数据
 	if err := db.InsertPods(podsDBList); err != nil {
 		fmt.Printf("插入Pod数据失败: %v\n", err)
-		return
+		return err
 	}
+	return nil
 }
 
 // UpdateJumpHostConfig 扫描跳板机配置
-func UpdateJumpHostConfig(db *DatabaseManager, task *Task) bool {
+func UpdateJumpHostConfig(ctx context.Context, db *DatabaseManager, task *Task) (bool, error) {
 	log.Printf("[UpdateJumpHostConfig] 更新跳板机")
 	db.DeleteAllUploadConfigs()
-	ListUploadConfig(task.JumpHostConfig, 50, NewJumpHostProgressListener(task, db))
-	return true
+	return ListUploadConfig(ctx, task.JumpHostConfig, 50, NewJumpHostProgressListener(task, db))
 }
 
 func GetEnvironmentFromConfig(config map[string]interface{}, envName string) (*Environment, error) {
