@@ -2,6 +2,7 @@ package main
 
 import (
 	"log"
+	"time"
 
 	"RancherMan/operations"
 	"RancherMan/rancher"
@@ -36,6 +37,15 @@ func main() {
 
 	// 启动任务队列
 	taskQueue.Start(&taskQueueUI{})
+	time.AfterFunc(300*time.Millisecond, func() {
+		db := operations.GetDb()
+		taskQueue := operations.GetTaskQueue()
+		config := operations.GetConfig()
+		for envName, _ := range config["environment"].(map[interface{}]interface{}) {
+			environment, _ := rancher.GetEnvironmentFromConfig(config, envName.(string))
+			operations.UpdatePodsTask(environment, db, taskQueue)
+		}
+	})
 
 	window.ShowAndRun()
 }

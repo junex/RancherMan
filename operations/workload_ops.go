@@ -259,10 +259,15 @@ func UpdatePodsTask(env *rancher.Environment, db *rancher.DatabaseManager, taskQ
 }
 
 func OpenWorkloadTask(env *rancher.Environment, db *rancher.DatabaseManager, workloads []rancher.Workload, taskQueue *rancher.TaskQueue) {
-	SortWorkloadsByPriority(workloads, SortAsc)
-	for i := range workloads {
-		fmt.Printf("正在处理 %s\n", workloads[i].Name)
+	hasDependDatabaseWorkload := false
+	for _, w := range workloads {
+		priority, _ := workloadPriority(w.Name)
+		if priority == 4 {
+			hasDependDatabaseWorkload = true
+		}
 	}
+
+	SortWorkloadsByPriority(workloads, SortAsc)
 	for i, workload := range workloads {
 		newTask := &rancher.Task{
 			Type:        rancher.TaskTypeScaleOpen,
@@ -273,9 +278,13 @@ func OpenWorkloadTask(env *rancher.Environment, db *rancher.DatabaseManager, wor
 			Replicas:    1,
 		}
 		taskQueue.AddTask(newTask)
-		_, delayMs := workloadPriority(workload.Name)
-		if i < len(workloads)-1 {
-			DelayTask(newTask.Description+"后", delayMs, taskQueue)
+		if hasDependDatabaseWorkload {
+			_, delayMs := workloadPriority(workload.Name)
+			if i < len(workloads)-1 {
+				DelayTask(newTask.Description+"后", delayMs, taskQueue)
+			} else {
+				DelayTask(newTask.Description+"后", 500, taskQueue)
+			}
 		}
 	}
 	DelayTask("打开服务后", 500, taskQueue)
@@ -300,6 +309,14 @@ func CloseWorkloadTask(env *rancher.Environment, db *rancher.DatabaseManager, wo
 }
 
 func RedeployWorkloadTask(env *rancher.Environment, db *rancher.DatabaseManager, workloads []rancher.Workload, taskQueue *rancher.TaskQueue) {
+	hasDependDatabaseWorkload := false
+	for i := range workloads {
+		workload := workloads[i]
+		priority, _ := workloadPriority(workload.Name)
+		if priority == 4 {
+			hasDependDatabaseWorkload = true
+		}
+	}
 	SortWorkloadsByPriority(workloads, SortAsc)
 	for i, workload := range workloads {
 		newTask := &rancher.Task{
@@ -310,9 +327,13 @@ func RedeployWorkloadTask(env *rancher.Environment, db *rancher.DatabaseManager,
 			Workload:    workload.Name,
 		}
 		taskQueue.AddTask(newTask)
-		_, delayMs := workloadPriority(workload.Name)
-		if i < len(workloads)-1 {
-			DelayTask(newTask.Description+"后", delayMs, taskQueue)
+		if hasDependDatabaseWorkload {
+			_, delayMs := workloadPriority(workload.Name)
+			if i < len(workloads)-1 {
+				DelayTask(newTask.Description+"后", delayMs, taskQueue)
+			}
+		} else {
+			DelayTask(newTask.Description+"后", 500, taskQueue)
 		}
 	}
 	DelayTask("重新部署服务后", 500, taskQueue)
@@ -371,8 +392,8 @@ var workloadRules = []struct {
 }{
 	// 这个顺序是为了最后匹配数据库，防止错误匹配
 	{priority: 2, keywords: []string{"redis", "mongo", "elasticsearch", "rabbitmq", "kafka", "minio"}, delayMs: 1000},
-	{priority: 3, keywords: []string{"web-"}, delayMs: 100},
-	{priority: 4, keywords: []string{"-portal", "-api", "xxl-job"}, delayMs: 3000},
+	{priority: 3, keywords: []string{"web-"}, delayMs: 1000},
+	{priority: 4, keywords: []string{"-portal", "-api", "xxl-job", "one-travel", "sot-"}, delayMs: 3000},
 	{priority: 1, keywords: []string{"mysql", "dm", "kingbase"}, delayMs: 10000},
 }
 
