@@ -158,6 +158,36 @@ func (tq *TaskQueue) CancelAll() {
 	tq.tasks = newTasks
 }
 
+func (tq *TaskQueue) GetTaskCountForUI() (current, total int) {
+	tq.mu.Lock()
+	defer tq.mu.Unlock()
+
+	// 计算非TaskTypeDelay类型的任务总数
+	total = 0
+	for _, t := range tq.tasks {
+		if t.Type != TaskTypeDelay {
+			total++
+		}
+	}
+
+	completedCount := 0
+	for _, t := range tq.tasks {
+		if t.Type != TaskTypeDelay && (t.Status == TaskStatusCompleted || t.Status == TaskStatusFailed) {
+			completedCount++
+		}
+	}
+
+	// 如果有正在执行的任务，current = 已完成数 + 1
+	// 否则 current = 已完成数
+	if tq.currentTask != nil && (tq.currentTask.Status == TaskStatusRunning) && tq.currentTask.Type != TaskTypeDelay {
+		current = completedCount + 1
+	} else {
+		current = completedCount
+	}
+
+	return current, total
+}
+
 // GetTaskCount 获取任务总数和当前执行序号
 func (tq *TaskQueue) GetTaskCount() (current, total int) {
 	tq.mu.Lock()
@@ -222,7 +252,7 @@ func (tq *TaskQueue) Start(ui TaskQueueUI) {
 				return
 			case <-ticker.C:
 				dotIndex = (dotIndex + 1) % len(dotStates)
-				current, total := tq.GetTaskCount()
+				current, total := tq.GetTaskCountForUI()
 				hasRunning := tq.HasRunningTasks()
 
 				var taskInfo string
