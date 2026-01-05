@@ -6,8 +6,8 @@ toolchain go1.23.2
 
 require (
 	fyne.io/fyne/v2 v2.5.2
+	github.com/gorilla/websocket v1.5.0
 	golang.org/x/crypto v0.24.0
-	gopkg.in/yaml.v2 v2.4.0
 	gopkg.in/yaml.v3 v3.0.1
 	gorm.io/driver/sqlite v1.5.6
 	gorm.io/gorm v1.25.12

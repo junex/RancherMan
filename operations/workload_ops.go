@@ -286,8 +286,6 @@ func OpenWorkloadTask(env *rancher.Environment, db *rancher.DatabaseManager, wor
 			}
 		}
 	}
-	DelayTask("打开服务后", 500, taskQueue)
-	UpdatePodsTask(env, db, taskQueue)
 }
 
 func CloseWorkloadTask(env *rancher.Environment, db *rancher.DatabaseManager, workloads []rancher.Workload, taskQueue *rancher.TaskQueue) {
@@ -303,8 +301,6 @@ func CloseWorkloadTask(env *rancher.Environment, db *rancher.DatabaseManager, wo
 		}
 		taskQueue.AddTask(newTask)
 	}
-	DelayTask("关闭服务后", 500, taskQueue)
-	UpdatePodsTask(env, db, taskQueue)
 }
 
 func RedeployWorkloadTask(env *rancher.Environment, db *rancher.DatabaseManager, workloads []rancher.Workload, taskQueue *rancher.TaskQueue) {
@@ -335,8 +331,6 @@ func RedeployWorkloadTask(env *rancher.Environment, db *rancher.DatabaseManager,
 			DelayTask(newTask.Description+"后", 500, taskQueue)
 		}
 	}
-	DelayTask("重新部署服务后", 500, taskQueue)
-	UpdatePodsTask(env, db, taskQueue)
 }
 
 func DelayTask(reason string, delayMs int, taskQueue *rancher.TaskQueue) {

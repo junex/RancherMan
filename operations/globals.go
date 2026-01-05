@@ -238,7 +238,7 @@ func LoadConfig(showSuccessTip bool) {
 	var err error
 	gConfig, err = rancher.LoadConfigFromDb(gDb)
 	// 解析跳板机配置
-	if jumpHost, exists := gConfig["jump_host"].(map[interface{}]interface{}); exists {
+	if jumpHost, exists := gConfig["jump_host"].(map[string]interface{}); exists {
 		gJumpHostConfig = &rancher.JumpHostConfig{
 			Ip:       jumpHost["ip"].(string),
 			Port:     strconv.Itoa(jumpHost["port"].(int)),

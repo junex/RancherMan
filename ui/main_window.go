@@ -46,8 +46,8 @@ func InitView() fyne.Window {
 				} else {
 					// 如果没有选中环境，则更新所有环境
 					config := operations.GetConfig()
-					for envName, _ := range config["environment"].(map[interface{}]interface{}) {
-						environment, _ := rancher.GetEnvironmentFromConfig(config, envName.(string))
+					for envName, _ := range config["environment"].(map[string]interface{}) {
+						environment, _ := rancher.GetEnvironmentFromConfig(config, envName)
 						operations.UpdateDataTask(environment, db, taskQueue)
 					}
 				}
@@ -64,8 +64,8 @@ func InitView() fyne.Window {
 				} else {
 					// 如果没有选中环境，则更新所有环境
 					config := operations.GetConfig()
-					for envName, _ := range config["environment"].(map[interface{}]interface{}) {
-						environment, _ := rancher.GetEnvironmentFromConfig(config, envName.(string))
+					for envName, _ := range config["environment"].(map[string]interface{}) {
+						environment, _ := rancher.GetEnvironmentFromConfig(config, envName)
 						operations.UpdatePortMapTask(environment, db, taskQueue)
 					}
 				}
@@ -113,7 +113,7 @@ func InitView() fyne.Window {
 		fyne.NewMenu("帮助",
 			fyne.NewMenuItem("关于", func() {
 				dialog.ShowInformation("关于",
-					"Rancher助手 v1.0\n\n"+
+					"Rancher助手 v1.3\n\n"+
 						"一个用于管理Rancher工作负载的工具\n"+
 						"作者: 六月盒饭\n"+
 						"版权所有 2024",

@@ -340,6 +340,48 @@ func (dm *DatabaseManager) GetPodsByEnvNamespaceWorkload(environment string, nam
 	return pods, result.Error
 }
 
+// UpdatePod 更新Pod信息
+func (dm *DatabaseManager) UpdatePod(pod *Pod) error {
+	return dm.db.Save(pod).Error
+}
+
+// GetPodByID 根据ID获取Pod
+func (dm *DatabaseManager) GetPodByID(id string) (*Pod, error) {
+	var pod Pod
+	result := dm.db.Where("id = ?", id).First(&pod)
+	if result.Error == gorm.ErrRecordNotFound {
+		return nil, nil
+	}
+	return &pod, result.Error
+}
+
+// SaveOrUpdatePodByID 根据ID存在则更新，不存在则新增Pod
+func (dm *DatabaseManager) SaveOrUpdatePodByID(pod *Pod) error {
+	// 检查Pod是否已存在
+	existingPod, err := dm.GetPodByID(pod.ID)
+	if err != nil {
+		return err
+	}
+
+	if existingPod != nil {
+		// 如果存在，更新现有记录
+		return dm.UpdatePod(pod)
+	} else {
+		// 如果不存在，创建新记录
+		return dm.db.Create(pod).Error
+	}
+}
+
+// DeletePodByID 根据ID删除Pod
+func (dm *DatabaseManager) DeletePodByID(id string) (bool, error) {
+	// Use Where clause to handle string IDs with special characters properly
+	result := dm.db.Where("id = ?", id).Delete(&Pod{})
+	if result.Error != nil {
+		return false, result.Error
+	}
+	return result.RowsAffected > 0, nil
+}
+
 // ClearAllData 清除namespace,pod,workload的数据
 func (dm *DatabaseManager) ClearAllData() error {
 	return dm.db.Transaction(func(tx *gorm.DB) error {

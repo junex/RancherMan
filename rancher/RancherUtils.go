@@ -5,10 +5,11 @@ import (
 	"fmt"
 	"log"
 	"strings"
+	"sync"
 
 	"encoding/json"
 
-	"gopkg.in/yaml.v2"
+	"gopkg.in/yaml.v3"
 )
 
 type Environment struct {
@@ -32,6 +33,11 @@ type jumpHostProgressListener struct {
 	task *Task
 	db   *DatabaseManager
 }
+
+var (
+	gResourceWebsocket []ResourceWebSocket
+	resourceWsMu       sync.Mutex
+)
 
 // NewJumpHostProgressListener 创建跳板机进度监听器
 func NewJumpHostProgressListener(task *Task, db *DatabaseManager) ProgressListener {
@@ -219,6 +225,7 @@ func UpdateService(ctx context.Context, db *DatabaseManager, environment *Enviro
 }
 
 func UpdatePod(ctx context.Context, db *DatabaseManager, environment *Environment) error {
+	disconnectResourceWebsocket(environment)
 	// 获取所有pod
 	podList, err := GetPodList(ctx, *environment)
 	if err != nil {
@@ -257,7 +264,7 @@ func UpdateJumpHostConfig(ctx context.Context, db *DatabaseManager, task *Task) 
 
 func GetEnvironmentFromConfig(config map[string]interface{}, envName string) (*Environment, error) {
 	// 从配置中获取environments部分
-	environments, ok := config["environment"].(map[interface{}]interface{})
+	environments, ok := config["environment"].(map[string]interface{})
 	if !ok {
 		fmt.Println("配置中找不到environment部分")
 		return nil, fmt.Errorf("配置中找不到environment部分")
@@ -265,17 +272,17 @@ func GetEnvironmentFromConfig(config map[string]interface{}, envName string) (*E
 
 	// 查找指定的环境
 	for name, envData := range environments {
-		if name.(string) == envName {
-			env := envData.(map[interface{}]interface{})
-			key := env["key"].(map[interface{}]interface{})
+		if name == envName {
+			env := envData.(map[string]interface{})
+			key := env["key"].(map[string]interface{})
 
 			// 解析nginx配置
 			var nginxConfigs []NginxMap
-			if nginxData, exists := env["nginx"].(map[interface{}]interface{}); exists {
+			if nginxData, exists := env["nginx"].(map[string]interface{}); exists {
 				for Name, nginxConfig := range nginxData {
-					nginx := nginxConfig.(map[interface{}]interface{})
+					nginx := nginxConfig.(map[string]interface{})
 					nginxConfigs = append(nginxConfigs, NginxMap{
-						Name:     Name.(string),
+						Name:     Name,
 						BaseUrl:  nginx["base_url"].(string),
 						ConfPath: nginx["nginx_conf"].(string),
 					})
@@ -283,7 +290,7 @@ func GetEnvironmentFromConfig(config map[string]interface{}, envName string) (*E
 			}
 
 			return &Environment{
-				ID:        name.(string),
+				ID:        name,
 				Name:      env["name"].(string),
 				BaseURL:   env["base_url"].(string),
 				Project:   env["project"].(string),
@@ -297,4 +304,25 @@ func GetEnvironmentFromConfig(config map[string]interface{}, envName string) (*E
 
 	fmt.Printf("找不到环境: %s\n", envName)
 	return nil, fmt.Errorf("找不到环境: %s", envName)
+}
+
+func disconnectResourceWebsocket(environment *Environment) {
+	resourceWsMu.Lock()
+	defer resourceWsMu.Unlock()
+
+	for i := len(gResourceWebsocket) - 1; i >= 0; i-- {
+		ws := gResourceWebsocket[i]
+
+		if ws.environment.BaseURL == environment.BaseURL &&
+			ws.environment.Project == environment.Project {
+
+			ws.Close() // 不要用指针指向切片元素
+
+			// 删除
+			gResourceWebsocket = append(
+				gResourceWebsocket[:i],
+				gResourceWebsocket[i+1:]...,
+			)
+		}
+	}
 }
