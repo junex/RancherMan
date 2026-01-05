@@ -12,11 +12,19 @@ import (
 	"strings"
 )
 
-type WorkloadResp struct {
-	Name        string
+type Resource struct {
+	ID          string
+	BaseType    string
 	NamespaceID string
 	ProjectID   string
-	Containers  []Container
+	Name        string
+	Type        string
+	State       string
+}
+
+type WorkloadResp struct {
+	Resource
+	Containers []Container
 }
 
 type Container struct {
@@ -28,22 +36,17 @@ type Container struct {
 }
 
 type NamespaceResp struct {
-	Name        string
-	ProjectId   string
+	Resource
 	Description string
 }
 
 type PodResp struct {
-	ProjectId   string
-	NamespaceId string
-	WorkloadId  string
-	State       string
+	Resource
+	WorkloadID string
 }
 
 type ServiceResp struct {
-	ProjectId         string
-	NamespaceId       string
-	Name              string
+	Resource
 	TargetWorkloadIds []string
 	Kind              string
 	Ports             []PortResp

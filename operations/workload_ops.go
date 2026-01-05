@@ -205,7 +205,6 @@ func UpdateDataTask(env *rancher.Environment, db *rancher.DatabaseManager, taskQ
 	}
 	taskQueue.AddTask(newTask)
 	UpdatePortMapTask(env, db, taskQueue)
-	DelayTask("更新数据后", 500, taskQueue)
 	UpdatePodsTask(env, db, taskQueue)
 }
 

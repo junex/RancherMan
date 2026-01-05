@@ -104,15 +104,16 @@ func UpdateEnvironment(ctx context.Context, db *DatabaseManager, environment *En
 		}
 		var namespaceList []NamespaceResp
 		for _, ns := range allNamespaces {
-			if ns.ProjectId == environment.Project {
+			if ns.ProjectID == environment.Project {
 				namespaceList = append(namespaceList, ns)
 			}
 		}
 		for _, namespace := range namespaceList {
 			namespaceDBList = append(namespaceDBList, Namespace{
+				ID:          namespace.ID,
 				Name:        namespace.Name,
 				Environment: environment.ID,
-				Project:     namespace.ProjectId,
+				Project:     namespace.ProjectID,
 				Description: namespace.Description,
 			})
 		}
@@ -156,6 +157,7 @@ func UpdateEnvironment(ctx context.Context, db *DatabaseManager, environment *En
 
 			accessPath := LookupService(lookupDict, workload.Name, workload.NamespaceID)
 			workloadsDBList = append(workloadsDBList, Workload{
+				ID:                   workload.ID,
 				Environment:          environment.ID,
 				Namespace:            workload.NamespaceID,
 				ProjectId:            workload.ProjectID,
@@ -192,8 +194,8 @@ func UpdateService(ctx context.Context, db *DatabaseManager, environment *Enviro
 			}
 			servicesDBList = append(servicesDBList, Service{
 				Environment:  environment.ID,
-				ProjectId:    service.ProjectId,
-				NamespaceId:  service.NamespaceId,
+				ProjectId:    service.ProjectID,
+				NamespaceId:  service.NamespaceID,
 				Name:         service.Name,
 				WorkloadId:   workloadId,
 				Kind:         service.Kind,
@@ -227,10 +229,11 @@ func UpdatePod(ctx context.Context, db *DatabaseManager, environment *Environmen
 	var podsDBList []Pod
 	for _, pod := range podList {
 		podsDBList = append(podsDBList, Pod{
+			ID:          pod.ID,
 			Environment: environment.ID,
-			ProjectId:   pod.ProjectId,
-			NamespaceId: pod.NamespaceId,
-			WorkloadId:  pod.WorkloadId,
+			ProjectId:   pod.ProjectID,
+			NamespaceId: pod.NamespaceID,
+			WorkloadId:  pod.WorkloadID,
 			State:       pod.State,
 		})
 	}

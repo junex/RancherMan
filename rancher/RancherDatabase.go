@@ -12,7 +12,7 @@ import (
 
 // Workload 工作负载模型
 type Workload struct {
-	ID                   uint   `gorm:"primaryKey"`
+	ID                   string `gorm:"size:100:primaryKey"`
 	Environment          string `gorm:"size:20"`
 	ProjectId            string `gorm:"size:20"`
 	Namespace            string `gorm:"size:50"`
@@ -40,7 +40,7 @@ func (Config) TableName() string {
 
 // Namespace 命名空间模型
 type Namespace struct {
-	ID          uint   `gorm:"primaryKey"`
+	ID          string `gorm:"size:50:primaryKey"`
 	Name        string `gorm:"size:30"`
 	Project     string `gorm:"size:30"`
 	Environment string `gorm:"size:20"`
@@ -53,7 +53,7 @@ func (Namespace) TableName() string {
 
 // Pod 模型
 type Pod struct {
-	ID          uint   `gorm:"primaryKey"`
+	ID          string `gorm:"size:100:primaryKey"`
 	Environment string `gorm:"size:20"`
 	ProjectId   string `gorm:"size:20"`
 	NamespaceId string `gorm:"size:20"`
