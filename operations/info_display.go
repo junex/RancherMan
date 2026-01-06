@@ -9,33 +9,41 @@ import (
 	"RancherMan/rancher"
 )
 
+var gPodListAfterUpdateInfoArea []rancher.Pod
+var GPodStateMapAfterUpdateInfoArea map[string]string
+
 // UpdateInfoArea 根据选择的状态更新信息区域
 func UpdateInfoArea() {
 	if len(gSelectedWorkloads) == 0 && gSelectedNamespace.Name == "" {
 		gInfoArea.SetText("")
 	} else if len(gSelectedWorkloads) == 0 {
+		gPodListAfterUpdateInfoArea, _ = gDb.GetPodsByEnvNamespace(gSelectedNamespace.Environment, gSelectedNamespace.Name)
+		GPodStateMapAfterUpdateInfoArea = GetPodStateMap(gPodListAfterUpdateInfoArea)
 		updateInfoAreaForSelectNamespace()
 	} else if len(gSelectedWorkloads) == 1 {
+		gPodListAfterUpdateInfoArea, _ = gDb.GetPodsByEnvNamespace(gSelectedNamespace.Environment, gSelectedNamespace.Name)
+		GPodStateMapAfterUpdateInfoArea = GetPodStateMap(gPodListAfterUpdateInfoArea)
 		updateInfoAreaForSingleWorkload()
 	} else {
+		gPodListAfterUpdateInfoArea, _ = gDb.GetPodsByEnvNamespace(gSelectedNamespace.Environment, gSelectedNamespace.Name)
+		GPodStateMapAfterUpdateInfoArea = GetPodStateMap(gPodListAfterUpdateInfoArea)
 		updateInfoAreaForSelectMultiWorkload()
 	}
+	gWorkloadList.RefreshList()
 }
 
 // updateInfoAreaForSelectNamespace 更新选择命名空间时的信息显示
 func updateInfoAreaForSelectNamespace() {
-	podList, _ := gDb.GetPodsByEnvNamespace(gSelectedNamespace.Environment, gSelectedNamespace.Name)
-
 	var info strings.Builder
 	// todo 修复gEnvironment偶尔为null导致闪退
 	info.WriteString(fmt.Sprintf("环境: %s\n", gEnvironment.Name))
 	info.WriteString(fmt.Sprintf("命名空间: %s\n", gSelectedNamespace.Name))
 	info.WriteString(fmt.Sprintf("项目: %s\n", gSelectedNamespace.Project))
 	info.WriteString(fmt.Sprintf("描述: %s\n", gSelectedNamespace.Description))
-	info.WriteString(fmt.Sprintf("pod数量: %d\n", len(podList)))
+	info.WriteString(fmt.Sprintf("pod数量: %d\n", len(gPodListAfterUpdateInfoArea)))
 	// 创建一个map来存储相同workloadId的pod状态
 	podStates := make(map[string][]string)
-	for _, pod := range podList {
+	for _, pod := range gPodListAfterUpdateInfoArea {
 		// 获取workloadId的最后一部分
 		parts := strings.Split(pod.WorkloadId, ":")
 		workloadName := parts[len(parts)-1]
@@ -59,7 +67,7 @@ func updateInfoAreaForSelectNamespace() {
 // updateInfoAreaForSingleWorkload 更新选择单个工作负载时的信息显示
 func updateInfoAreaForSingleWorkload() {
 	workload := gSelectedWorkloads[0]
-	podList, _ := gDb.GetPodsByEnvNamespaceWorkload(workload.Environment, workload.Namespace, workload.Name)
+	podList := FilterPodList(workload.Name)
 
 	// 构建信息字符串
 	var info strings.Builder
@@ -217,12 +225,69 @@ func updateInfoAreaForSingleWorkload() {
 // updateInfoAreaForSelectMultiWorkload 更新选择多个工作负载时的信息显示
 func updateInfoAreaForSelectMultiWorkload() {
 	var info strings.Builder
-	info.WriteString(fmt.Sprintf("已选择 %d 个服务:\n", len(gSelectedWorkloads)))
-
-	for _, workload := range gSelectedWorkloads {
-		info.WriteString(fmt.Sprintf("\n服务名称: %s\n", workload.Name))
-		info.WriteString(fmt.Sprintf("镜像: %s\n", workload.Image))
+	// todo 修复gEnvironment偶尔为null导致闪退
+	info.WriteString(fmt.Sprintf("环境: %s\n", gEnvironment.Name))
+	info.WriteString(fmt.Sprintf("命名空间: %s\n", gSelectedNamespace.Name))
+	info.WriteString(fmt.Sprintf("项目: %s\n", gSelectedNamespace.Project))
+	info.WriteString(fmt.Sprintf("描述: %s\n", gSelectedNamespace.Description))
+	info.WriteString(fmt.Sprintf("pod数量: %d\n", len(gPodListAfterUpdateInfoArea)))
+	// 创建一个map来存储相同workloadId的pod状态
+	podStates := make(map[string][]string)
+	for _, pod := range gPodListAfterUpdateInfoArea {
+		// 获取workloadId的最后一部分
+		parts := strings.Split(pod.WorkloadId, ":")
+		workloadName := parts[len(parts)-1]
+		podStates[workloadName] = append(podStates[workloadName], pod.State)
 	}
 
+	keys := make([]string, 0, len(podStates))
+	for k := range podStates {
+		keys = append(keys, k)
+	}
+
+	sort.Strings(keys)
+
+	// 复制一份，不影响原 slice
+	sortedWorkloads := make([]rancher.Workload, len(gSelectedWorkloads))
+	copy(sortedWorkloads, gSelectedWorkloads)
+
+	// 按 Name 排序
+	sort.Slice(sortedWorkloads, func(i, j int) bool {
+		return sortedWorkloads[i].Name < sortedWorkloads[j].Name
+	})
+
+	for _, workload := range sortedWorkloads {
+		states := podStates[workload.Name]
+		info.WriteString(fmt.Sprintf("%s: %s\n", workload.Name, strings.Join(states, ",")))
+	}
 	gInfoArea.SetText(info.String())
+}
+
+func FilterPodList(name string) []rancher.Pod {
+	podList := []rancher.Pod{}
+	for _, pod := range gPodListAfterUpdateInfoArea {
+		parts := strings.Split(pod.WorkloadId, ":")
+		podWorkloadName := parts[len(parts)-1]
+		if podWorkloadName == name {
+			podList = append(podList, pod)
+		}
+	}
+	return podList
+}
+
+// GetPodStateMap 获取name到state的反字典映射
+// 对于相同名称的pod，running状态具有最高优先级，可以覆盖其他状态
+func GetPodStateMap(podList []rancher.Pod) map[string]string {
+	podStateMap := make(map[string]string)
+	for _, pod := range podList {
+		// 如果当前状态不是running，而新状态是running，则更新为running
+		if currentStatus, exists := podStateMap[pod.WorkloadId]; exists {
+			if currentStatus != "running" && pod.State == "running" {
+				podStateMap[pod.WorkloadId] = pod.State
+			}
+		} else {
+			podStateMap[pod.WorkloadId] = pod.State
+		}
+	}
+	return podStateMap
 }

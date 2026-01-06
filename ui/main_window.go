@@ -1,6 +1,8 @@
 package ui
 
 import (
+	"fyne.io/fyne/v2/canvas"
+	"image/color"
 	"log"
 
 	"fyne.io/fyne/v2"
@@ -165,15 +167,27 @@ func InitView() fyne.Window {
 	gWorkloadList = component.NewList(
 		func() int { return len(operations.GetFilteredWorkloads()) },
 		func() fyne.CanvasObject {
-			return container.NewHBox(
-				widget.NewCheck("", func(bool) {}),
-				widget.NewLabel("Template Service"),
+			bg := canvas.NewRectangle(color.Transparent)
+
+			check := widget.NewCheck("", func(bool) {})
+			label := widget.NewLabel("Template Service")
+
+			content := container.NewHBox(check, label)
+
+			return container.NewStack(
+				bg,
+				content,
 			)
 		},
 		func(id widget.ListItemID, item fyne.CanvasObject) {
 			workload := operations.GetFilteredWorkloads()[id]
-			check := item.(*fyne.Container).Objects[0].(*widget.Check)
-			label := item.(*fyne.Container).Objects[1].(*widget.Label)
+			state := operations.GPodStateMapAfterUpdateInfoArea[workload.ID]
+
+			c := item.(*fyne.Container)
+			bg := c.Objects[0].(*canvas.Rectangle)
+			content := c.Objects[1].(*fyne.Container)
+			check := content.Objects[0].(*widget.Check)
+			label := content.Objects[1].(*widget.Label)
 			label.SetText(workload.Name)
 			check.OnChanged = func(checked bool) {
 				if checked {
@@ -191,6 +205,16 @@ func InitView() fyne.Window {
 				}
 			}
 			check.SetChecked(isSelected)
+
+			switch state {
+			case "running":
+				bg.FillColor = color.RGBA{R: 220, G: 245, B: 220, A: 255} // 浅绿
+			case "":
+				bg.FillColor = color.Transparent
+			default:
+				bg.FillColor = color.RGBA{R: 245, G: 220, B: 220, A: 255} // 浅红
+			}
+			bg.Refresh()
 		},
 	)
 	gWorkloadList.OnMultiSelected(func(ids []int) {
