@@ -29,7 +29,7 @@ func UpdateInfoArea() {
 		GPodStateMapAfterUpdateInfoArea = GetPodStateMap(gPodListAfterUpdateInfoArea)
 		updateInfoAreaForSelectMultiWorkload()
 	}
-	gWorkloadList.RefreshList()
+	gWorkloadList.Refresh()
 }
 
 // updateInfoAreaForSelectNamespace 更新选择命名空间时的信息显示

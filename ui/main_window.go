@@ -190,6 +190,10 @@ func InitView() fyne.Window {
 			label := content.Objects[1].(*widget.Label)
 			label.SetText(workload.Name)
 			check.OnChanged = func(checked bool) {
+				isChecked := gWorkloadList.IsSelected(id)
+				if isChecked == checked {
+					return
+				}
 				if checked {
 					gWorkloadList.MultiSelectedOne(id)
 				} else {

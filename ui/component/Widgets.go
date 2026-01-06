@@ -3,6 +3,7 @@ package component
 import (
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/widget"
+	"log"
 )
 
 // MultiSelectList 是一个支持多选的列表组件
@@ -94,16 +95,19 @@ func (t *MultiSelectList) MultiSelected() {
 func (t *MultiSelectList) UnselectMulti() {
 	t.selectedIds = make(map[int]struct{})
 	t.MultiSelected()
+	log.Println("UnselectMulti")
 }
 
 func (t *MultiSelectList) MultiSelectedOne(id widget.ListItemID) {
 	t.selectedIds[id] = struct{}{}
 	t.MultiSelected()
+	log.Println("MultiSelectedOne id:", id)
 }
 
 func (t *MultiSelectList) UnMultiSelectedOne(id widget.ListItemID) {
 	delete(t.selectedIds, id)
 	t.MultiSelected()
+	log.Println("UnMultiSelectedOne id:", id)
 }
 
 func (t *MultiSelectList) RefreshList() {
@@ -113,4 +117,8 @@ func (t *MultiSelectList) RefreshList() {
 			t.RefreshItem(i)
 		}
 	}
+}
+
+func (t *MultiSelectList) IsSelected(pos int) bool {
+	return t.selectedIds[pos] != struct{}{}
 }
