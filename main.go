@@ -41,7 +41,17 @@ func main() {
 		db := operations.GetDb()
 		taskQueue := operations.GetTaskQueue()
 		config := operations.GetConfig()
-		for envName, _ := range config["environment"].(map[string]interface{}) {
+
+		// 检查 config 和 environment 是否存在
+		if config == nil {
+			return
+		}
+		env, ok := config["environment"]
+		if !ok || env == nil {
+			return
+		}
+
+		for envName, _ := range env.(map[string]interface{}) {
 			environment, _ := rancher.GetEnvironmentFromConfig(config, envName)
 			operations.UpdatePodsTask(environment, db, taskQueue)
 		}
@@ -77,11 +87,11 @@ func (t *taskQueueUI) OnTaskComplete(task *rancher.Task, result rancher.TaskResu
 	case rancher.TaskTypeUpdateDataComplete, rancher.TaskTypeClearData:
 		operations.InitData()
 	case rancher.TaskTypeUpdatePod:
-		ws := rancher.NewRancherWebSocket(task.Environment, operations.GetDb(), rancher.PodEventHandler{OnPodsChanged: operations.UpdateInfoArea})
+		ws := rancher.NewRancherWebSocket(task.Environment, operations.GetDb(), rancher.PodEventHandler{OnPodsChanged: ui.UpdateInfoArea})
 		if err := ws.Connect(); err != nil {
 			println("连接Rancher失败: %v", err)
 			ws.Close()
 		}
 	}
-	operations.UpdateInfoArea()
+	ui.UpdateInfoArea()
 }

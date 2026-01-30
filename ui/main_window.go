@@ -30,8 +30,10 @@ func InitView() fyne.Window {
 				var content = operations.GetInfoArea().Text
 				rancher.SaveConfigToDb(operations.GetDb(), content)
 				operations.LoadConfig(true)
+				gInfoAreaStatus = InfoAreaStatusInfo
 			}),
 			fyne.NewMenuItem("显示配置", func() {
+				gInfoAreaStatus = InfoAreaStatusConfig
 				configContent, _ := operations.GetDb().GetConfigContent(1)
 				operations.GetInfoArea().SetText(configContent)
 			}),
@@ -141,7 +143,7 @@ func InitView() fyne.Window {
 	)
 	gNamespaceList.OnSelected = func(id widget.ListItemID) {
 		selectNamespace(operations.GetFilteredNamespaces()[id])
-		operations.UpdateInfoArea()
+		UpdateInfoArea()
 	}
 
 	// 添加命名空间搜索功能
@@ -153,7 +155,7 @@ func InitView() fyne.Window {
 		if len(operations.GetFilteredNamespaces()) >= 1 {
 			gNamespaceList.Select(0)
 		}
-		operations.UpdateInfoArea()
+		UpdateInfoArea()
 	}
 
 	namespaceScroll := container.NewScroll(gNamespaceList)
@@ -237,7 +239,7 @@ func InitView() fyne.Window {
 		operations.SetSelectedWorkloads(selectedWorkloads)
 		log.Printf("[OnMultiSelected] Total selected workloads: %d", len(selectedWorkloads))
 		// 更新信息区域显示
-		operations.UpdateInfoArea()
+		UpdateInfoArea()
 	})
 
 	// 添加服务搜索功能
@@ -248,7 +250,7 @@ func InitView() fyne.Window {
 		if len(operations.GetFilteredWorkloads()) == 1 {
 			gWorkloadList.Select(0)
 		}
-		operations.UpdateInfoArea()
+		UpdateInfoArea()
 	}
 
 	workloadScroll := container.NewScroll(gWorkloadList)
@@ -270,6 +272,7 @@ func InitView() fyne.Window {
 		taskQueue := operations.GetTaskQueue()
 
 		if env != nil {
+			gInfoAreaStatus = InfoAreaStatusInfo
 			operations.UpdatePodsTask(env, db, taskQueue)
 		} else {
 			log.Printf("[buttonUpdatePod] gEnvironment is nil, skipping")
@@ -450,4 +453,10 @@ func selectNamespace(namespace rancher.Namespace) {
 
 	gWorkloadList.UnselectMulti()
 	gWorkloadList.RefreshList()
+}
+
+func UpdateInfoArea() {
+	if gInfoAreaStatus == InfoAreaStatusInfo {
+		operations.UpdateInfoArea()
+	}
 }

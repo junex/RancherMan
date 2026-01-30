@@ -16,4 +16,13 @@ var (
 	gApp              fyne.App
 	gTaskStatusBar    *component.TaskStatusBar
 	gOperationButtons []*widget.Button
+	gInfoAreaStatus   InfoAreaStatus = InfoAreaStatusInfo // 默认显示信息
+)
+
+// InfoAreaStatus 信息区域状态
+type InfoAreaStatus int
+
+const (
+	InfoAreaStatusConfig InfoAreaStatus = iota // 显示配置
+	InfoAreaStatusInfo                         // 显示信息
 )
