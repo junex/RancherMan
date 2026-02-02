@@ -387,7 +387,7 @@ var workloadRules = []struct {
 	{priority: 2, keywords: []string{"redis", "mongo", "elasticsearch", "rabbitmq", "kafka", "minio"}, delayMs: 1000},
 	{priority: 3, keywords: []string{"web-"}, delayMs: 1000},
 	{priority: 4, keywords: []string{"-portal", "-api", "xxl-job", "one-travel", "sot-"}, delayMs: 3000},
-	{priority: 1, keywords: []string{"mysql", "dm", "kingbase"}, delayMs: 10000},
+	{priority: 1, keywords: []string{"mysql", "dm", "kingbase"}, delayMs: 3000},
 }
 
 func workloadPriority(name string) (int, int) {
