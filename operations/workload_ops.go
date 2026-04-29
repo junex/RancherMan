@@ -16,7 +16,7 @@ import (
 // CloneOrExportWorkload 克隆或导出工作负载
 func CloneOrExportWorkload(isClone bool, destNamespace rancher.Namespace, tag string) {
 	if isClone && destNamespace.Name == "" {
-		gInfoArea.SetText("未选择目标命名空间")
+		GetInfoArea().SetText("未选择目标命名空间")
 		return
 	}
 
@@ -26,7 +26,7 @@ func CloneOrExportWorkload(isClone bool, destNamespace rancher.Namespace, tag st
 	processWorkloads := func(workloads []rancher.Workload) {
 		for _, workload := range workloads {
 			info.WriteString(fmt.Sprintf("获取deployment: %s    ", workload.Name))
-			deployment, err := rancher.GetDeploymentYaml(context.Background(), *gEnvironment, workload.Namespace, workload.Name)
+			deployment, err := rancher.GetDeploymentYaml(context.Background(), *GetEnvironment(), workload.Namespace, workload.Name)
 			if err == nil {
 				info.WriteString("成功!\n")
 				// 替换deployment名称中的namespace
@@ -37,7 +37,7 @@ func CloneOrExportWorkload(isClone bool, destNamespace rancher.Namespace, tag st
 				if tag != "" {
 					// 检查workload是否在忽略列表中
 					shouldUpdateTag := true
-					for _, ignoreName := range gCloneIgnoreTagWorkload {
+					for _, ignoreName := range GetCloneIgnoreTagWorkload() {
 						if strings.Contains(workload.Name, ignoreName) {
 							shouldUpdateTag = false
 							break
@@ -85,7 +85,7 @@ func CloneOrExportWorkload(isClone bool, destNamespace rancher.Namespace, tag st
 
 				if isClone {
 					// 克隆模式：导入到Rancher
-					destEnvironment, _ := rancher.GetEnvironmentFromConfig(gConfig, destNamespace.Environment)
+					destEnvironment, _ := rancher.GetEnvironmentFromConfig(GetConfig(), destNamespace.Environment)
 					err := rancher.ImportYaml(context.Background(), *destEnvironment, "big-data", yamlData)
 					if err != nil {
 						info.WriteString("克隆失败!\n")
@@ -103,14 +103,18 @@ func CloneOrExportWorkload(isClone bool, destNamespace rancher.Namespace, tag st
 			} else {
 				info.WriteString("失败!\n")
 			}
-			gInfoArea.SetText(info.String())
+			GetInfoArea().SetText(info.String())
 		}
 	}
 
-	if len(gSelectedWorkloads) > 0 {
-		processWorkloads(gSelectedWorkloads)
-	} else if len(gFilteredWorkloads) > 0 {
-		processWorkloads(gFilteredWorkloads)
+	workloads := GetSelectedWorkloads()
+	if len(workloads) > 0 {
+		processWorkloads(workloads)
+	} else {
+		filtered := GetFilteredWorkloads()
+		if len(filtered) > 0 {
+			processWorkloads(filtered)
+		}
 	}
 
 	// 如果是导出模式，将所有YAML写入文件
@@ -123,21 +127,21 @@ func CloneOrExportWorkload(isClone bool, destNamespace rancher.Namespace, tag st
 		}
 	}
 
-	gInfoArea.SetText(info.String())
+	GetInfoArea().SetText(info.String())
 }
 
 // CloneOrExportConfigMap 克隆或导出ConfigMap
 func CloneOrExportConfigMap(isClone bool, destNamespace rancher.Namespace) {
 	if isClone && destNamespace.Name == "" {
-		gInfoArea.SetText("未选择目标命名空间")
+		GetInfoArea().SetText("未选择目标命名空间")
 		return
 	}
 
 	var info strings.Builder
 	var allYaml strings.Builder // 用于存储所有workload的YAML
-	list, err := rancher.GetConfigMapList(context.Background(), *gEnvironment, gSelectedNamespace.Name)
+	list, err := rancher.GetConfigMapList(context.Background(), *GetEnvironment(), GetSelectedNamespace().Name)
 	if err != nil {
-		gInfoArea.SetText("获取配置时出错")
+		GetInfoArea().SetText("获取配置时出错")
 		return
 	}
 
@@ -159,7 +163,7 @@ func CloneOrExportConfigMap(isClone bool, destNamespace rancher.Namespace) {
 
 		if isClone {
 			// 克隆模式：导入到Rancher
-			destEnvironment, _ := rancher.GetEnvironmentFromConfig(gConfig, destNamespace.Environment)
+			destEnvironment, _ := rancher.GetEnvironmentFromConfig(GetConfig(), destNamespace.Environment)
 			err := rancher.ImportYaml(context.Background(), *destEnvironment, "big-data", yamlData)
 			if err != nil {
 				info.WriteString("克隆失败!\n")
@@ -174,7 +178,7 @@ func CloneOrExportConfigMap(isClone bool, destNamespace rancher.Namespace) {
 			allYaml.WriteString("\n")
 			info.WriteString("已添加到导出文件\n")
 		}
-		gInfoArea.SetText(info.String())
+		GetInfoArea().SetText(info.String())
 	}
 
 	// 如果是导出模式，将所有YAML写入文件
@@ -187,7 +191,7 @@ func CloneOrExportConfigMap(isClone bool, destNamespace rancher.Namespace) {
 		}
 	}
 
-	gInfoArea.SetText(info.String())
+	GetInfoArea().SetText(info.String())
 }
 
 // UpdateDataTask 创建更新数据任务

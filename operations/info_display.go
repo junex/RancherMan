@@ -11,11 +11,12 @@ import (
 
 // UpdateInfoArea 根据选择的状态更新信息区域
 func UpdateInfoArea() {
-	if len(gSelectedWorkloads) == 0 && gSelectedNamespace.Name == "" {
-		gInfoArea.SetText("")
-	} else if len(gSelectedWorkloads) == 0 {
+	workloads := GetSelectedWorkloads()
+	if len(workloads) == 0 && GetSelectedNamespace().Name == "" {
+		GetInfoArea().SetText("")
+	} else if len(workloads) == 0 {
 		updateInfoAreaForSelectNamespace()
-	} else if len(gSelectedWorkloads) == 1 {
+	} else if len(workloads) == 1 {
 		updateInfoAreaForSingleWorkload()
 	} else {
 		updateInfoAreaForSelectMultiWorkload()
@@ -24,14 +25,14 @@ func UpdateInfoArea() {
 
 // updateInfoAreaForSelectNamespace 更新选择命名空间时的信息显示
 func updateInfoAreaForSelectNamespace() {
-	podList, _ := gDb.GetPodsByEnvNamespace(gSelectedNamespace.Environment, gSelectedNamespace.Name)
+	ns := GetSelectedNamespace()
+	podList, _ := GetDb().GetPodsByEnvNamespace(ns.Environment, ns.Name)
 
 	var info strings.Builder
-	// todo 修复gEnvironment偶尔为null导致闪退
-	info.WriteString(fmt.Sprintf("环境: %s\n", gEnvironment.Name))
-	info.WriteString(fmt.Sprintf("命名空间: %s\n", gSelectedNamespace.Name))
-	info.WriteString(fmt.Sprintf("项目: %s\n", gSelectedNamespace.Project))
-	info.WriteString(fmt.Sprintf("描述: %s\n", gSelectedNamespace.Description))
+	info.WriteString(fmt.Sprintf("环境: %s\n", GetEnvironment().Name))
+	info.WriteString(fmt.Sprintf("命名空间: %s\n", ns.Name))
+	info.WriteString(fmt.Sprintf("项目: %s\n", ns.Project))
+	info.WriteString(fmt.Sprintf("描述: %s\n", ns.Description))
 	info.WriteString(fmt.Sprintf("pod数量: %d\n", len(podList)))
 	// 创建一个map来存储相同workloadId的pod状态
 	podStates := make(map[string][]string)
@@ -53,13 +54,13 @@ func updateInfoAreaForSelectNamespace() {
 		states := podStates[workloadName]
 		info.WriteString(fmt.Sprintf("%s: %s\n", workloadName, strings.Join(states, ",")))
 	}
-	gInfoArea.SetText(info.String())
+	GetInfoArea().SetText(info.String())
 }
 
 // updateInfoAreaForSingleWorkload 更新选择单个工作负载时的信息显示
 func updateInfoAreaForSingleWorkload() {
-	workload := gSelectedWorkloads[0]
-	podList, _ := gDb.GetPodsByEnvNamespaceWorkload(workload.Environment, workload.Namespace, workload.Name)
+	workload := GetSelectedWorkloads()[0]
+	podList, _ := GetDb().GetPodsByEnvNamespaceWorkload(workload.Environment, workload.Namespace, workload.Name)
 
 	// 构建信息字符串
 	var info strings.Builder
@@ -99,10 +100,10 @@ func updateInfoAreaForSingleWorkload() {
 	if strings.TrimSpace(workload.Remark) != "" {
 		info.WriteString(fmt.Sprintf("备注: \n%s\n", workload.Remark))
 	}
-	services, err := gDb.GetServicesByWorkload(workload.Environment, workload.ProjectId, workload.Namespace, workload.Name)
+	services, err := GetDb().GetServicesByWorkload(workload.Environment, workload.ProjectId, workload.Namespace, workload.Name)
 	if err == nil && len(services) > 0 {
 		info.WriteString("端口访问:\n")
-		ip := gEnvironment.Ip
+		ip := GetEnvironment().Ip
 		for _, port := range services {
 			if port.Kind == "NodePort" {
 				info.WriteString(fmt.Sprintf("  %s    %s    %d->%s:%d\n", port.PortName, port.PortProtocol, port.Port, ip, port.NodePort))
@@ -121,7 +122,7 @@ func updateInfoAreaForSingleWorkload() {
 	}
 	var uploadConfigList []rancher.UploadConfig
 	// 获取完整镜像名称的配置
-	configs, _ := gDb.GetUploadConfigsByImage(workload.Image)
+	configs, _ := GetDb().GetUploadConfigsByImage(workload.Image)
 	uploadConfigList = append(uploadConfigList, configs...)
 
 	// 获取不带标签的镜像名称的配置
@@ -131,7 +132,7 @@ func updateInfoAreaForSingleWorkload() {
 		image = workload.Image[:colonIndex]
 		tag = workload.Image[colonIndex+1:]
 	}
-	configs1, _ := gDb.GetUploadConfigsByImageLikeSpecial1(image)
+	configs1, _ := GetDb().GetUploadConfigsByImageLikeSpecial1(image)
 	uploadConfigList = append(uploadConfigList, configs1...)
 	// 获取最后两个/之间的部分
 	imageDir := ""
@@ -145,7 +146,7 @@ func updateInfoAreaForSingleWorkload() {
 	if lastSlashIndex := strings.LastIndex(image, "/"); lastSlashIndex >= 0 {
 		image = image[lastSlashIndex+1:]
 	}
-	configs2, _ := gDb.GetUploadConfigsByImageLikeSpecial2(image)
+	configs2, _ := GetDb().GetUploadConfigsByImageLikeSpecial2(image)
 	uploadConfigList = append(uploadConfigList, configs2...)
 	// 对uploadConfigList进行排序
 	sort.Slice(uploadConfigList, func(i, j int) bool {
@@ -211,18 +212,18 @@ func updateInfoAreaForSingleWorkload() {
 			info.WriteString("\n")
 		}
 	}
-	gInfoArea.SetText(info.String())
+	GetInfoArea().SetText(info.String())
 }
 
 // updateInfoAreaForSelectMultiWorkload 更新选择多个工作负载时的信息显示
 func updateInfoAreaForSelectMultiWorkload() {
 	var info strings.Builder
-	info.WriteString(fmt.Sprintf("已选择 %d 个服务:\n", len(gSelectedWorkloads)))
+	info.WriteString(fmt.Sprintf("已选择 %d 个服务:\n", len(GetSelectedWorkloads())))
 
-	for _, workload := range gSelectedWorkloads {
+	for _, workload := range GetSelectedWorkloads() {
 		info.WriteString(fmt.Sprintf("\n服务名称: %s\n", workload.Name))
 		info.WriteString(fmt.Sprintf("镜像: %s\n", workload.Image))
 	}
 
-	gInfoArea.SetText(info.String())
+	GetInfoArea().SetText(info.String())
 }
