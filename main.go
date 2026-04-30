@@ -37,9 +37,6 @@ func main() {
 	// 加载配置
 	operations.LoadConfig(false)
 
-	// 初始化数据
-	operations.InitData()
-
 	// 启动任务队列
 	taskQueue.Start(&taskQueueUI{
 		taskStatusBar:    result.TaskStatusBar,
@@ -53,6 +50,11 @@ func main() {
 			environment, _ := rancher.GetEnvironmentFromConfig(config, envName.(string))
 			operations.UpdatePodsTask(environment, db, taskQueue)
 		}
+	})
+
+	// 延迟初始化数据，确保在 ShowAndRun 后执行（Fyne 渲染管线就绪）
+	time.AfterFunc(30*time.Millisecond, func() {
+		operations.InitData()
 	})
 
 	window.ShowAndRun()

@@ -293,21 +293,21 @@ func InitData() {
 	dispatcher := appState.UIDispatcher
 	appState.mu.Unlock()
 
-	// UI 部分：必须在主 goroutine 执行
-	if nsList != nil {
-		if selectIndex < 0 {
-			nsList.UnselectAll()
-			nsList.ScrollToTop()
-			nsList.Refresh()
-		} else {
-			if dispatcher != nil {
+	// UI 部分：必须通过 dispatcher 在主 goroutine 执行
+	if nsList != nil && dispatcher != nil {
+		dispatcher.RunOnUI(func() {
+			if selectIndex < 0 {
+				nsList.UnselectAll()
+				nsList.ScrollToTop()
+				nsList.Refresh()
+			} else {
+				nsList.Refresh()
 				time.AfterFunc(time.Millisecond*20, func() {
 					dispatcher.RunOnUI(func() {
 						nsList.Select(selectIndex)
 					})
 				})
 			}
-			nsList.Refresh()
-		}
+		})
 	}
 }

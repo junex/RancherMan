@@ -29,7 +29,10 @@ func updateInfoAreaForSelectNamespace() {
 	podList, _ := GetDb().GetPodsByEnvNamespace(ns.Environment, ns.Name)
 
 	var info strings.Builder
-	info.WriteString(fmt.Sprintf("环境: %s\n", GetEnvironment().Name))
+	env := GetEnvironment()
+	if env != nil {
+		info.WriteString(fmt.Sprintf("环境: %s\n", env.Name))
+	}
 	info.WriteString(fmt.Sprintf("命名空间: %s\n", ns.Name))
 	info.WriteString(fmt.Sprintf("项目: %s\n", ns.Project))
 	info.WriteString(fmt.Sprintf("描述: %s\n", ns.Description))
@@ -103,7 +106,10 @@ func updateInfoAreaForSingleWorkload() {
 	services, err := GetDb().GetServicesByWorkload(workload.Environment, workload.ProjectId, workload.Namespace, workload.Name)
 	if err == nil && len(services) > 0 {
 		info.WriteString("端口访问:\n")
-		ip := GetEnvironment().Ip
+		ip := ""
+		if env := GetEnvironment(); env != nil {
+			ip = env.Ip
+		}
 		for _, port := range services {
 			if port.Kind == "NodePort" {
 				info.WriteString(fmt.Sprintf("  %s    %s    %d->%s:%d\n", port.PortName, port.PortProtocol, port.Port, ip, port.NodePort))
