@@ -7,9 +7,6 @@ import (
 	"time"
 
 	"RancherMan/rancher"
-	"RancherMan/ui/component"
-	"fyne.io/fyne/v2"
-	"fyne.io/fyne/v2/widget"
 )
 
 // SetDb 设置数据库管理器
@@ -181,111 +178,52 @@ func GetSelectedWorkloads() []rancher.Workload {
 }
 
 // SetNamespaceList 设置命名空间列表UI组件
-func SetNamespaceList(list *widget.List) {
+func SetNamespaceList(list ListRefresher) {
 	appState.mu.Lock()
 	defer appState.mu.Unlock()
 	appState.NamespaceList = list
 }
 
 // GetNamespaceList 获取命名空间列表UI组件
-func GetNamespaceList() *widget.List {
+func GetNamespaceList() ListRefresher {
 	appState.mu.RLock()
 	defer appState.mu.RUnlock()
 	return appState.NamespaceList
 }
 
 // SetNamespaceSearch 设置命名空间搜索框
-func SetNamespaceSearch(entry *widget.Entry) {
+func SetNamespaceSearch(entry TextGetter) {
 	appState.mu.Lock()
 	defer appState.mu.Unlock()
 	appState.NamespaceSearch = entry
 }
 
 // GetNamespaceSearch 获取命名空间搜索框
-func GetNamespaceSearch() *widget.Entry {
+func GetNamespaceSearch() TextGetter {
 	appState.mu.RLock()
 	defer appState.mu.RUnlock()
 	return appState.NamespaceSearch
 }
 
-// SetWorkloadList 设置工作负载列表UI组件
-func SetWorkloadList(list *component.MultiSelectList) {
-	appState.mu.Lock()
-	defer appState.mu.Unlock()
-	appState.WorkloadList = list
-}
-
-// GetWorkloadList 获取工作负载列表UI组件
-func GetWorkloadList() *component.MultiSelectList {
-	appState.mu.RLock()
-	defer appState.mu.RUnlock()
-	return appState.WorkloadList
-}
-
-// SetWorkloadSearch 设置工作负载搜索框
-func SetWorkloadSearch(entry *widget.Entry) {
-	appState.mu.Lock()
-	defer appState.mu.Unlock()
-	appState.WorkloadSearch = entry
-}
-
-// GetWorkloadSearch 获取工作负载搜索框
-func GetWorkloadSearch() *widget.Entry {
-	appState.mu.RLock()
-	defer appState.mu.RUnlock()
-	return appState.WorkloadSearch
-}
-
-// SetWorkloadSearchText 设置工作负载搜索框文本
-func SetWorkloadSearchText(text string) {
-	appState.mu.RLock()
-	ws := appState.WorkloadSearch
-	appState.mu.RUnlock()
-	if ws != nil {
-		ws.SetText(text)
-	}
-}
-
 // SetInfoArea 设置信息区域
-func SetInfoArea(entry *widget.Entry) {
+func SetInfoArea(display InfoDisplayer) {
 	appState.mu.Lock()
 	defer appState.mu.Unlock()
-	appState.InfoArea = entry
+	appState.InfoArea = display
 }
 
 // GetInfoArea 获取信息区域
-func GetInfoArea() *widget.Entry {
+func GetInfoArea() InfoDisplayer {
 	appState.mu.RLock()
 	defer appState.mu.RUnlock()
 	return appState.InfoArea
 }
 
-// SetTaskStatusBar 设置任务状态栏
-func SetTaskStatusBar(statusBar *component.TaskStatusBar) {
+// SetUIDispatcher 设置UI线程调度器
+func SetUIDispatcher(d UIDispatcher) {
 	appState.mu.Lock()
 	defer appState.mu.Unlock()
-	appState.TaskStatusBar = statusBar
-}
-
-// GetTaskStatusBar 获取任务状态栏
-func GetTaskStatusBar() *component.TaskStatusBar {
-	appState.mu.RLock()
-	defer appState.mu.RUnlock()
-	return appState.TaskStatusBar
-}
-
-// SetOperationButtons 设置操作按钮列表
-func SetOperationButtons(buttons []*widget.Button) {
-	appState.mu.Lock()
-	defer appState.mu.Unlock()
-	appState.OperationButtons = buttons
-}
-
-// GetOperationButtons 获取操作按钮列表
-func GetOperationButtons() []*widget.Button {
-	appState.mu.RLock()
-	defer appState.mu.RUnlock()
-	return appState.OperationButtons
+	appState.UIDispatcher = d
 }
 
 // LoadConfig 加载配置
@@ -334,7 +272,7 @@ func InitData() {
 
 	searchText := ""
 	if appState.NamespaceSearch != nil {
-		searchText = appState.NamespaceSearch.Text
+		searchText = appState.NamespaceSearch.Text()
 	}
 	appState.FilteredNamespaces = FilterNamespaces(appState.Namespaces, searchText)
 	log.Printf("[InitData] 初始化数据完成，共有命名空间 %d 个\n", len(appState.Namespaces))
@@ -352,6 +290,7 @@ func InitData() {
 	}
 
 	nsList := appState.NamespaceList
+	dispatcher := appState.UIDispatcher
 	appState.mu.Unlock()
 
 	// UI 部分：必须在主 goroutine 执行
@@ -361,11 +300,13 @@ func InitData() {
 			nsList.ScrollToTop()
 			nsList.Refresh()
 		} else {
-			time.AfterFunc(time.Millisecond*20, func() {
-				fyne.Do(func() {
-					nsList.Select(selectIndex)
+			if dispatcher != nil {
+				time.AfterFunc(time.Millisecond*20, func() {
+					dispatcher.RunOnUI(func() {
+						nsList.Select(selectIndex)
+					})
 				})
-			})
+			}
 			nsList.Refresh()
 		}
 	}

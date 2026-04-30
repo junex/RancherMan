@@ -4,9 +4,6 @@ import (
 	"sync"
 
 	"RancherMan/rancher"
-	"RancherMan/ui/component"
-	"fyne.io/fyne/v2"
-	"fyne.io/fyne/v2/widget"
 )
 
 // AppState 应用全局状态，使用 RWMutex 保护并发读写
@@ -25,14 +22,12 @@ type AppState struct {
 	Workloads              []rancher.Workload
 	FilteredWorkloads      []rancher.Workload
 	SelectedWorkloads      []rancher.Workload
-	NamespaceList          *widget.List
-	NamespaceSearch        *widget.Entry
-	WorkloadList           *component.MultiSelectList
-	WorkloadSearch         *widget.Entry
-	InfoArea               *widget.Entry
-	App                    fyne.App
-	TaskStatusBar          *component.TaskStatusBar
-	OperationButtons       []*widget.Button
+
+	// UI依赖（通过接口注入，解除对 Fyne 的具体依赖）
+	NamespaceList   ListRefresher
+	NamespaceSearch TextGetter
+	InfoArea        InfoDisplayer
+	UIDispatcher    UIDispatcher
 }
 
 var appState = &AppState{}

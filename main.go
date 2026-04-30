@@ -7,8 +7,10 @@ import (
 	"RancherMan/operations"
 	"RancherMan/rancher"
 	"RancherMan/ui"
+	"RancherMan/ui/component"
 
 	"fyne.io/fyne/v2"
+	"fyne.io/fyne/v2/widget"
 )
 
 func main() {
@@ -25,7 +27,8 @@ func main() {
 	operations.SetTaskQueue(taskQueue)
 
 	// 初始化UI
-	window := ui.InitView()
+	result := ui.InitView()
+	window := result.Window
 	window.SetCloseIntercept(func() {
 		taskQueue.Stop()
 		window.Close()
@@ -38,7 +41,10 @@ func main() {
 	operations.InitData()
 
 	// 启动任务队列
-	taskQueue.Start(&taskQueueUI{})
+	taskQueue.Start(&taskQueueUI{
+		taskStatusBar:    result.TaskStatusBar,
+		operationButtons: result.OperationButtons,
+	})
 	time.AfterFunc(300*time.Millisecond, func() {
 		db := operations.GetDb()
 		taskQueue := operations.GetTaskQueue()
@@ -53,17 +59,19 @@ func main() {
 }
 
 // taskQueueUI 实现任务队列UI回调
-type taskQueueUI struct{}
+type taskQueueUI struct {
+	taskStatusBar    *component.TaskStatusBar
+	operationButtons []*widget.Button
+}
 
 func (t *taskQueueUI) UpdateStatus(status string, dots string, current int, total int, taskInfo string) {
 	fyne.Do(func() {
-		taskStatusBar := operations.GetTaskStatusBar()
-		if taskStatusBar != nil {
-			taskStatusBar.Update(status, dots, taskInfo, current, total)
+		if t.taskStatusBar != nil {
+			t.taskStatusBar.Update(status, dots, taskInfo, current, total)
 		}
 
 		hasRunning := (status == "执行")
-		for _, btn := range operations.GetOperationButtons() {
+		for _, btn := range t.operationButtons {
 			if hasRunning {
 				btn.Disable()
 			} else {
