@@ -268,8 +268,10 @@ func (dm *DatabaseManager) GetWorkloadByID(id uint) (*Workload, error) {
 
 // GetWorkloadsByNamespace 根据命��空间获取工作负载列表
 func (dm *DatabaseManager) GetWorkloadsByNamespace(namespace string) ([]Workload, error) {
+	log.Printf("[GetWorkloadsByNamespace] Loading workloads for namespace: %s", namespace)
 	var workloads []Workload
 	result := dm.db.Where("namespace = ?", namespace).Find(&workloads)
+	log.Printf("[GetWorkloadsByNamespace] Loaded %d workloads for namespace: %s, error: %v", len(workloads), namespace, result.Error)
 	return workloads, result.Error
 }
 
