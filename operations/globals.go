@@ -7,293 +7,307 @@ import (
 	"time"
 
 	"RancherMan/rancher"
-	"RancherMan/ui/component"
-	"fyne.io/fyne/v2"
-	"fyne.io/fyne/v2/widget"
-)
-
-// 全局变量，由main包设置
-var (
-	gDb                     *rancher.DatabaseManager
-	gConfig                 map[string]interface{}
-	gEnvironment            *rancher.Environment
-	gJumpHostConfig         *rancher.JumpHostConfig
-	gCloneIgnoreTagWorkload []string
-	gTaskQueue              *rancher.TaskQueue
-	gNamespaces             []rancher.Namespace
-	gFilteredNamespaces     []rancher.Namespace
-	gSelectedNamespace      rancher.Namespace
-	gWorkloads              []rancher.Workload
-	gFilteredWorkloads      []rancher.Workload
-	gSelectedWorkloads      []rancher.Workload
-	gNamespaceList          *widget.List
-	gNamespaceSearch        *widget.Entry
-	gWorkloadList           *component.MultiSelectList
-	gWorkloadSearch         *widget.Entry
-	gInfoArea               *widget.Entry
-	gApp                    fyne.App
-	gTaskStatusBar          *component.TaskStatusBar
-	gOperationButtons       []*widget.Button
 )
 
 // SetDb 设置数据库管理器
 func SetDb(db *rancher.DatabaseManager) {
-	gDb = db
+	appState.mu.Lock()
+	defer appState.mu.Unlock()
+	appState.Db = db
 }
 
 // GetDb 获取数据库管理器
 func GetDb() *rancher.DatabaseManager {
-	return gDb
+	appState.mu.RLock()
+	defer appState.mu.RUnlock()
+	return appState.Db
 }
 
 // SetConfig 设置配置
 func SetConfig(config map[string]interface{}) {
-	gConfig = config
+	appState.mu.Lock()
+	defer appState.mu.Unlock()
+	appState.Config = config
 }
 
 // GetConfig 获取配置
 func GetConfig() map[string]interface{} {
-	return gConfig
+	appState.mu.RLock()
+	defer appState.mu.RUnlock()
+	return appState.Config
 }
 
 // SetEnvironment 设置环境
 func SetEnvironment(env *rancher.Environment) {
-	gEnvironment = env
+	appState.mu.Lock()
+	defer appState.mu.Unlock()
+	appState.Environment = env
 }
 
 // GetEnvironment 获取环境
 func GetEnvironment() *rancher.Environment {
-	return gEnvironment
+	appState.mu.RLock()
+	defer appState.mu.RUnlock()
+	return appState.Environment
 }
 
 // SetJumpHostConfig 设置跳板机配置
 func SetJumpHostConfig(config *rancher.JumpHostConfig) {
-	gJumpHostConfig = config
+	appState.mu.Lock()
+	defer appState.mu.Unlock()
+	appState.JumpHostConfig = config
 }
 
 // GetJumpHostConfig 获取跳板机配置
 func GetJumpHostConfig() *rancher.JumpHostConfig {
-	return gJumpHostConfig
+	appState.mu.RLock()
+	defer appState.mu.RUnlock()
+	return appState.JumpHostConfig
 }
 
 // SetCloneIgnoreTagWorkload 设置忽略标签的工作负载列表
 func SetCloneIgnoreTagWorkload(list []string) {
-	gCloneIgnoreTagWorkload = list
+	appState.mu.Lock()
+	defer appState.mu.Unlock()
+	appState.CloneIgnoreTagWorkload = list
 }
 
 // GetCloneIgnoreTagWorkload 获取忽略标签的工作负载列表
 func GetCloneIgnoreTagWorkload() []string {
-	return gCloneIgnoreTagWorkload
+	appState.mu.RLock()
+	defer appState.mu.RUnlock()
+	return appState.CloneIgnoreTagWorkload
 }
 
 // SetTaskQueue 设置任务队列
 func SetTaskQueue(queue *rancher.TaskQueue) {
-	gTaskQueue = queue
+	appState.mu.Lock()
+	defer appState.mu.Unlock()
+	appState.TaskQueue = queue
 }
 
 // GetTaskQueue 获取任务队列
 func GetTaskQueue() *rancher.TaskQueue {
-	return gTaskQueue
+	appState.mu.RLock()
+	defer appState.mu.RUnlock()
+	return appState.TaskQueue
 }
 
 // SetNamespaces 设置命名空间列表
 func SetNamespaces(namespaces []rancher.Namespace) {
-	gNamespaces = namespaces
+	appState.mu.Lock()
+	defer appState.mu.Unlock()
+	appState.Namespaces = namespaces
 }
 
 // GetNamespaces 获取命名空间列表
 func GetNamespaces() []rancher.Namespace {
-	return gNamespaces
+	appState.mu.RLock()
+	defer appState.mu.RUnlock()
+	return appState.Namespaces
 }
 
 // SetFilteredNamespaces 设置过滤后的命名空间列表
 func SetFilteredNamespaces(namespaces []rancher.Namespace) {
-	gFilteredNamespaces = namespaces
+	appState.mu.Lock()
+	defer appState.mu.Unlock()
+	appState.FilteredNamespaces = namespaces
 }
 
 // GetFilteredNamespaces 获取过滤后的命名空间列表
 func GetFilteredNamespaces() []rancher.Namespace {
-	return gFilteredNamespaces
+	appState.mu.RLock()
+	defer appState.mu.RUnlock()
+	return appState.FilteredNamespaces
 }
 
 // GetSelectedNamespace 获取选中的命名空间
 func GetSelectedNamespace() rancher.Namespace {
-	return gSelectedNamespace
+	appState.mu.RLock()
+	defer appState.mu.RUnlock()
+	return appState.SelectedNamespace
 }
 
 // SetSelectedNamespace 设置选中的命名空间
 func SetSelectedNamespace(namespace rancher.Namespace) {
-	gSelectedNamespace = namespace
+	appState.mu.Lock()
+	defer appState.mu.Unlock()
+	appState.SelectedNamespace = namespace
 }
 
 // SetWorkloads 设置工作负载列表
 func SetWorkloads(workloads []rancher.Workload) {
-	gWorkloads = workloads
+	appState.mu.Lock()
+	defer appState.mu.Unlock()
+	appState.Workloads = workloads
 }
 
 // GetWorkloads 获取工作负载列表
 func GetWorkloads() []rancher.Workload {
-	return gWorkloads
+	appState.mu.RLock()
+	defer appState.mu.RUnlock()
+	return appState.Workloads
 }
 
 // SetFilteredWorkloads 设置过滤后的工作负载列表
 func SetFilteredWorkloads(workloads []rancher.Workload) {
-	gFilteredWorkloads = workloads
+	appState.mu.Lock()
+	defer appState.mu.Unlock()
+	appState.FilteredWorkloads = workloads
 }
 
 // GetFilteredWorkloads 获取过滤后的工作负载列表
 func GetFilteredWorkloads() []rancher.Workload {
-	return gFilteredWorkloads
+	appState.mu.RLock()
+	defer appState.mu.RUnlock()
+	return appState.FilteredWorkloads
 }
 
 // SetSelectedWorkloads 设置选中的工作负载列表
 func SetSelectedWorkloads(workloads []rancher.Workload) {
-	gSelectedWorkloads = workloads
+	appState.mu.Lock()
+	defer appState.mu.Unlock()
+	appState.SelectedWorkloads = workloads
 }
 
 // GetSelectedWorkloads 获取选中的工作负载列表
 func GetSelectedWorkloads() []rancher.Workload {
-	return gSelectedWorkloads
+	appState.mu.RLock()
+	defer appState.mu.RUnlock()
+	return appState.SelectedWorkloads
 }
 
 // SetNamespaceList 设置命名空间列表UI组件
-func SetNamespaceList(list *widget.List) {
-	gNamespaceList = list
+func SetNamespaceList(list ListRefresher) {
+	appState.mu.Lock()
+	defer appState.mu.Unlock()
+	appState.NamespaceList = list
 }
 
 // GetNamespaceList 获取命名空间列表UI组件
-func GetNamespaceList() *widget.List {
-	return gNamespaceList
+func GetNamespaceList() ListRefresher {
+	appState.mu.RLock()
+	defer appState.mu.RUnlock()
+	return appState.NamespaceList
 }
 
 // SetNamespaceSearch 设置命名空间搜索框
-func SetNamespaceSearch(entry *widget.Entry) {
-	gNamespaceSearch = entry
+func SetNamespaceSearch(entry TextGetter) {
+	appState.mu.Lock()
+	defer appState.mu.Unlock()
+	appState.NamespaceSearch = entry
 }
 
 // GetNamespaceSearch 获取命名空间搜索框
-func GetNamespaceSearch() *widget.Entry {
-	return gNamespaceSearch
-}
-
-// SetWorkloadList 设置工作负载列表UI组件
-func SetWorkloadList(list *component.MultiSelectList) {
-	gWorkloadList = list
-}
-
-// GetWorkloadList 获取工作负载列表UI组件
-func GetWorkloadList() *component.MultiSelectList {
-	return gWorkloadList
-}
-
-// SetWorkloadSearch 设置工作负载搜索框
-func SetWorkloadSearch(entry *widget.Entry) {
-	gWorkloadSearch = entry
-}
-
-// GetWorkloadSearch 获取工作负载搜索框
-func GetWorkloadSearch() *widget.Entry {
-	return gWorkloadSearch
-}
-
-// SetWorkloadSearchText 设置工作负载搜索框文本
-func SetWorkloadSearchText(text string) {
-	if gWorkloadSearch != nil {
-		gWorkloadSearch.SetText(text)
-	}
+func GetNamespaceSearch() TextGetter {
+	appState.mu.RLock()
+	defer appState.mu.RUnlock()
+	return appState.NamespaceSearch
 }
 
 // SetInfoArea 设置信息区域
-func SetInfoArea(entry *widget.Entry) {
-	gInfoArea = entry
+func SetInfoArea(display InfoDisplayer) {
+	appState.mu.Lock()
+	defer appState.mu.Unlock()
+	appState.InfoArea = display
 }
 
 // GetInfoArea 获取信息区域
-func GetInfoArea() *widget.Entry {
-	return gInfoArea
+func GetInfoArea() InfoDisplayer {
+	appState.mu.RLock()
+	defer appState.mu.RUnlock()
+	return appState.InfoArea
 }
 
-// SetTaskStatusBar 设置任务状态栏
-func SetTaskStatusBar(statusBar *component.TaskStatusBar) {
-	gTaskStatusBar = statusBar
-}
-
-// GetTaskStatusBar 获取任务状态栏
-func GetTaskStatusBar() *component.TaskStatusBar {
-	return gTaskStatusBar
-}
-
-// SetOperationButtons 设置操作按钮列表
-func SetOperationButtons(buttons []*widget.Button) {
-	gOperationButtons = buttons
-}
-
-// GetOperationButtons 获取操作按钮列表
-func GetOperationButtons() []*widget.Button {
-	return gOperationButtons
+// SetUIDispatcher 设置UI线程调度器
+func SetUIDispatcher(d UIDispatcher) {
+	appState.mu.Lock()
+	defer appState.mu.Unlock()
+	appState.UIDispatcher = d
 }
 
 // LoadConfig 加载配置
 func LoadConfig(showSuccessTip bool) {
+	appState.mu.Lock()
+	defer appState.mu.Unlock()
+
 	var err error
-	gConfig, err = rancher.LoadConfigFromDb(gDb)
-	// 解析跳板机配置
-	if jumpHost, exists := gConfig["jump_host"].(map[string]interface{}); exists {
-		gJumpHostConfig = &rancher.JumpHostConfig{
-			Ip:       jumpHost["ip"].(string),
-			Port:     strconv.Itoa(jumpHost["port"].(int)),
-			Username: jumpHost["username"].(string),
-			Password: jumpHost["password"].(string),
-			RootPath: jumpHost["root_path"].(string),
+	appState.Config, err = rancher.LoadConfigFromDb(appState.Db)
+
+	if appState.Config != nil {
+		if jumpHost, exists := appState.Config["jump_host"].(map[interface{}]interface{}); exists {
+			appState.JumpHostConfig = &rancher.JumpHostConfig{
+				Ip:       jumpHost["ip"].(string),
+				Port:     strconv.Itoa(jumpHost["port"].(int)),
+				Username: jumpHost["username"].(string),
+				Password: jumpHost["password"].(string),
+				RootPath: jumpHost["root_path"].(string),
+			}
+		}
+		if ignoreList, exists := appState.Config["clone_ignore_tag_workload"].([]interface{}); exists {
+			appState.CloneIgnoreTagWorkload = make([]string, len(ignoreList))
+			for i, item := range ignoreList {
+				appState.CloneIgnoreTagWorkload[i] = item.(string)
+			}
 		}
 	}
-	// 解析 clone_ignore_tag_workload
-	if ignoreList, exists := gConfig["clone_ignore_tag_workload"].([]interface{}); exists {
-		gCloneIgnoreTagWorkload = make([]string, len(ignoreList))
-		for i, item := range ignoreList {
-			gCloneIgnoreTagWorkload[i] = item.(string)
-		}
-	}
+
 	if err != nil {
-		if gInfoArea != nil {
-			gInfoArea.SetText(fmt.Sprintf("从数据库读取配置时出错: %v", err))
+		if appState.InfoArea != nil {
+			appState.InfoArea.SetText(fmt.Sprintf("从数据库读取配置时出错: %v", err))
 		}
 	} else {
-		if showSuccessTip && gInfoArea != nil {
-			gInfoArea.SetText("配置已成功加载")
+		if showSuccessTip && appState.InfoArea != nil {
+			appState.InfoArea.SetText("配置已成功加载")
 		}
 	}
 }
 
 // InitData 初始化数据
 func InitData() {
-	namespaces, _ := gDb.GetAllNamespacesDetail()
-	gNamespaces = append(namespaces)
-	gFilteredNamespaces = append(FilterNamespaces(gNamespaces, gNamespaceSearch.Text))
-	log.Printf("[InitData] 初始化数据完成，共有命名空间 %d 个\n", len(gNamespaces))
+	// 数据部分：持写锁
+	appState.mu.Lock()
+	namespaces, _ := appState.Db.GetAllNamespacesDetail()
+	appState.Namespaces = namespaces
+
+	searchText := ""
+	if appState.NamespaceSearch != nil {
+		searchText = appState.NamespaceSearch.Text()
+	}
+	appState.FilteredNamespaces = FilterNamespaces(appState.Namespaces, searchText)
+	log.Printf("[InitData] 初始化数据完成，共有命名空间 %d 个\n", len(appState.Namespaces))
 
 	selectIndex := -1
-	for i := range gFilteredNamespaces {
-		namespace := gFilteredNamespaces[i]
-		if gSelectedNamespace.Name == namespace.Name && gSelectedNamespace.Environment == namespace.Environment {
+	for i := range appState.FilteredNamespaces {
+		ns := appState.FilteredNamespaces[i]
+		if appState.SelectedNamespace.Name == ns.Name && appState.SelectedNamespace.Environment == ns.Environment {
 			selectIndex = i
 			break
 		}
 	}
 	if selectIndex < 0 {
-		gSelectedNamespace = rancher.Namespace{}
+		appState.SelectedNamespace = rancher.Namespace{}
 	}
 
-	if gNamespaceList != nil {
-		if selectIndex < 0 {
-			gNamespaceList.UnselectAll()
-			gNamespaceList.ScrollToTop()
-			gNamespaceList.Refresh()
-		} else {
-			time.AfterFunc(time.Millisecond*20, func() {
-				gNamespaceList.Select(selectIndex)
-			})
-			gNamespaceList.Refresh()
-		}
+	nsList := appState.NamespaceList
+	dispatcher := appState.UIDispatcher
+	appState.mu.Unlock()
+
+	// UI 部分：必须通过 dispatcher 在主 goroutine 执行
+	if nsList != nil && dispatcher != nil {
+		dispatcher.RunOnUI(func() {
+			if selectIndex < 0 {
+				nsList.UnselectAll()
+				nsList.ScrollToTop()
+				nsList.Refresh()
+			} else {
+				nsList.Refresh()
+				time.AfterFunc(time.Millisecond*20, func() {
+					dispatcher.RunOnUI(func() {
+						nsList.Select(selectIndex)
+					})
+				})
+			}
+		})
 	}
 }

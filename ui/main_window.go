@@ -16,8 +16,15 @@ import (
 	"RancherMan/ui/component"
 )
 
+// InitResult InitView 的返回结果
+type InitResult struct {
+	Window           fyne.Window
+	TaskStatusBar    *component.TaskStatusBar
+	OperationButtons []*widget.Button
+}
+
 // InitView 初始化应用程序界面
-func InitView() fyne.Window {
+func InitView() InitResult {
 	// 初始化界面
 	gApp = app.NewWithID("com.junefan.rancherman")
 	preferences := gApp.Preferences()
@@ -27,7 +34,7 @@ func InitView() fyne.Window {
 	mainMenu := fyne.NewMainMenu(
 		fyne.NewMenu("配置",
 			fyne.NewMenuItem("保存配置", func() {
-				var content = operations.GetInfoArea().Text
+				var content = operations.GetInfoArea().Text()
 				rancher.SaveConfigToDb(operations.GetDb(), content)
 				operations.LoadConfig(true)
 				gInfoAreaStatus = InfoAreaStatusInfo
@@ -262,9 +269,6 @@ func InitView() fyne.Window {
 	infoContainer := container.NewScroll(gInfoArea)
 	infoContainer.SetMinSize(fyne.NewSize(400, 0))
 
-	// 将InfoArea设置到operations包
-	operations.SetInfoArea(gInfoArea)
-
 	// 添加更pod按钮
 	buttonUpdatePod := widget.NewButton("更新Pod", func() {
 		env := operations.GetEnvironment()
@@ -348,19 +352,15 @@ func InitView() fyne.Window {
 	})
 
 	// 创建任务状态栏
-	gTaskStatusBar = component.NewTaskStatusBar(func() {
+	taskStatusBar := component.NewTaskStatusBar(func() {
 		taskQueue := operations.GetTaskQueue()
 		if taskQueue != nil {
 			taskQueue.CancelAll()
 		}
 	})
 
-	// 将TaskStatusBar设置到operations包
-	operations.SetTaskStatusBar(gTaskStatusBar)
-
 	// 收集所有操作按钮用于禁用/启用
-	gOperationButtons = []*widget.Button{buttonUpdatePod, buttonOpen, buttonClose, buttonRedeploy}
-	operations.SetOperationButtons(gOperationButtons)
+	operationButtons := []*widget.Button{buttonUpdatePod, buttonOpen, buttonClose, buttonRedeploy}
 
 	// 使用 Border 布局让高度自适应
 	// 每一列内部用 Border：顶部是标签和搜索框，中间是滚动内容（自动扩展），底部为空
@@ -401,7 +401,7 @@ func InitView() fyne.Window {
 	// 上半部分：左边是两列，右边是 InfoArea
 	topContent := container.NewBorder(nil, nil, leftPanel, nil, rightCol)
 	// 整体布局：上部是内容区，底部是任务栏（横跨整个窗口）
-	content := container.NewBorder(nil, gTaskStatusBar.GetContainer(), nil, nil, topContent)
+	content := container.NewBorder(nil, taskStatusBar.GetContainer(), nil, nil, topContent)
 	myWindow.SetContent(content)
 
 	// 设置窗口大小
@@ -419,13 +419,17 @@ func InitView() fyne.Window {
 		preferences.SetFloat("window_height", float64(size.Height))
 	})
 
-	// 将其他UI组件设置到operations包
+	// 将UI组件设置到operations包
+	operations.SetInfoArea(&entryAdapter{gInfoArea})
 	operations.SetNamespaceList(gNamespaceList)
-	operations.SetNamespaceSearch(gNamespaceSearch)
-	operations.SetWorkloadList(gWorkloadList)
-	operations.SetWorkloadSearch(gWorkloadSearch)
+	operations.SetNamespaceSearch(&entryAdapter{gNamespaceSearch})
+	operations.SetUIDispatcher(&fyneDispatcher{})
 
-	return myWindow
+	return InitResult{
+		Window:           myWindow,
+		TaskStatusBar:    taskStatusBar,
+		OperationButtons: operationButtons,
+	}
 }
 
 // selectNamespace 选择命名空间
@@ -447,7 +451,7 @@ func selectNamespace(namespace rancher.Namespace) {
 	operations.SetWorkloads(workloads)
 	log.Printf("[selectNamespace] Loaded %d workloads", len(workloads))
 
-	operations.SetWorkloadSearchText("")
+	gWorkloadSearch.SetText("")
 	operations.SetFilteredWorkloads(workloads)
 	operations.SetSelectedWorkloads([]rancher.Workload{})
 

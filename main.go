@@ -7,6 +7,10 @@ import (
 	"RancherMan/operations"
 	"RancherMan/rancher"
 	"RancherMan/ui"
+	"RancherMan/ui/component"
+
+	"fyne.io/fyne/v2"
+	"fyne.io/fyne/v2/widget"
 )
 
 func main() {
@@ -23,7 +27,8 @@ func main() {
 	operations.SetTaskQueue(taskQueue)
 
 	// 初始化UI
-	window := ui.InitView()
+	result := ui.InitView()
+	window := result.Window
 	window.SetCloseIntercept(func() {
 		taskQueue.Stop()
 		window.Close()
@@ -32,11 +37,11 @@ func main() {
 	// 加载配置
 	operations.LoadConfig(false)
 
-	// 初始化数据
-	operations.InitData()
-
 	// 启动任务队列
-	taskQueue.Start(&taskQueueUI{})
+	taskQueue.Start(&taskQueueUI{
+		taskStatusBar:    result.TaskStatusBar,
+		operationButtons: result.OperationButtons,
+	})
 	time.AfterFunc(300*time.Millisecond, func() {
 		db := operations.GetDb()
 		taskQueue := operations.GetTaskQueue()
@@ -57,41 +62,50 @@ func main() {
 		}
 	})
 
+	// 延迟初始化数据，确保在 ShowAndRun 后执行（Fyne 渲染管线就绪）
+	time.AfterFunc(30*time.Millisecond, func() {
+		operations.InitData()
+	})
+
 	window.ShowAndRun()
 }
 
 // taskQueueUI 实现任务队列UI回调
-type taskQueueUI struct{}
+type taskQueueUI struct {
+	taskStatusBar    *component.TaskStatusBar
+	operationButtons []*widget.Button
+}
 
 func (t *taskQueueUI) UpdateStatus(status string, dots string, current int, total int, taskInfo string) {
-	// 使用 goroutine UI 更新确保在主线程中更新
-	taskStatusBar := operations.GetTaskStatusBar()
-	if taskStatusBar != nil {
-		taskStatusBar.Update(status, dots, taskInfo, current, total)
-	}
-
-	// 根据是否有任务禁用/启用按钮
-	hasRunning := (status == "执行")
-	for _, btn := range operations.GetOperationButtons() {
-		if hasRunning {
-			btn.Disable()
-		} else {
-			btn.Enable()
+	fyne.Do(func() {
+		if t.taskStatusBar != nil {
+			t.taskStatusBar.Update(status, dots, taskInfo, current, total)
 		}
-	}
+
+		hasRunning := (status == "执行")
+		for _, btn := range t.operationButtons {
+			if hasRunning {
+				btn.Disable()
+			} else {
+				btn.Enable()
+			}
+		}
+	})
 }
 
 func (t *taskQueueUI) OnTaskComplete(task *rancher.Task, result rancher.TaskResult) {
-	log.Printf("[OnTaskComplete] task=%s type = %d success=%v", task.Description, task.Type, result.Success)
-	switch task.Type {
-	case rancher.TaskTypeUpdateDataComplete, rancher.TaskTypeClearData:
-		operations.InitData()
-	case rancher.TaskTypeUpdatePod:
-		ws := rancher.NewRancherWebSocket(task.Environment, operations.GetDb(), rancher.PodEventHandler{OnPodsChanged: ui.UpdateInfoArea})
-		if err := ws.Connect(); err != nil {
-			println("连接Rancher失败: %v", err)
-			ws.Close()
+	fyne.DoAndWait(func() {
+		log.Printf("[OnTaskComplete] task=%s type = %d success=%v", task.Description, task.Type, result.Success)
+		switch task.Type {
+		case rancher.TaskTypeUpdateDataComplete, rancher.TaskTypeClearData:
+			operations.InitData()
+		case rancher.TaskTypeUpdatePod:
+			ws := rancher.NewRancherWebSocket(task.Environment, operations.GetDb(), rancher.PodEventHandler{OnPodsChanged: ui.UpdateInfoArea})
+			if err := ws.Connect(); err != nil {
+				println("连接Rancher失败: %v", err)
+				ws.Close()
+			}
 		}
-	}
-	ui.UpdateInfoArea()
+		ui.UpdateInfoArea()
+	})
 }
