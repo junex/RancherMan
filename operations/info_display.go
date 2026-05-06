@@ -14,36 +14,37 @@ var GPodStateMapAfterUpdateInfoArea map[string]string
 
 // UpdateInfoArea 根据选择的状态更新信息区域
 func UpdateInfoArea() {
-	if len(gSelectedWorkloads) == 0 && gSelectedNamespace.Name == "" {
-		gInfoArea.SetText("")
-	} else if len(gSelectedWorkloads) == 0 {
-		gPodListAfterUpdateInfoArea, _ = gDb.GetPodsByEnvNamespace(gSelectedNamespace.Environment, gSelectedNamespace.Name)
-		GPodStateMapAfterUpdateInfoArea = GetPodStateMap(gPodListAfterUpdateInfoArea)
+	workloads := GetSelectedWorkloads()
+	if len(workloads) == 0 && GetSelectedNamespace().Name == "" {
+		GetInfoArea().SetText("")
+	} else if len(workloads) == 0 {
 		updateInfoAreaForSelectNamespace()
-	} else if len(gSelectedWorkloads) == 1 {
-		gPodListAfterUpdateInfoArea, _ = gDb.GetPodsByEnvNamespace(gSelectedNamespace.Environment, gSelectedNamespace.Name)
-		GPodStateMapAfterUpdateInfoArea = GetPodStateMap(gPodListAfterUpdateInfoArea)
+	} else if len(workloads) == 1 {
 		updateInfoAreaForSingleWorkload()
 	} else {
-		gPodListAfterUpdateInfoArea, _ = gDb.GetPodsByEnvNamespace(gSelectedNamespace.Environment, gSelectedNamespace.Name)
-		GPodStateMapAfterUpdateInfoArea = GetPodStateMap(gPodListAfterUpdateInfoArea)
 		updateInfoAreaForSelectMultiWorkload()
 	}
-	gWorkloadList.Refresh()
 }
 
 // updateInfoAreaForSelectNamespace 更新选择命名空间时的信息显示
 func updateInfoAreaForSelectNamespace() {
+	ns := GetSelectedNamespace()
+	podList, _ := GetDb().GetPodsByEnvNamespace(ns.Environment, ns.Name)
+	gPodListAfterUpdateInfoArea = podList
+	GPodStateMapAfterUpdateInfoArea = GetPodStateMap(podList)
+
 	var info strings.Builder
-	// todo 修复gEnvironment偶尔为null导致闪退
-	info.WriteString(fmt.Sprintf("环境: %s\n", gEnvironment.Name))
-	info.WriteString(fmt.Sprintf("命名空间: %s\n", gSelectedNamespace.Name))
-	info.WriteString(fmt.Sprintf("项目: %s\n", gSelectedNamespace.Project))
-	info.WriteString(fmt.Sprintf("描述: %s\n", gSelectedNamespace.Description))
-	info.WriteString(fmt.Sprintf("pod数量: %d\n", len(gPodListAfterUpdateInfoArea)))
+	env := GetEnvironment()
+	if env != nil {
+		info.WriteString(fmt.Sprintf("环境: %s\n", env.Name))
+	}
+	info.WriteString(fmt.Sprintf("命名空间: %s\n", ns.Name))
+	info.WriteString(fmt.Sprintf("项目: %s\n", ns.Project))
+	info.WriteString(fmt.Sprintf("描述: %s\n", ns.Description))
+	info.WriteString(fmt.Sprintf("pod数量: %d\n", len(podList)))
 	// 创建一个map来存储相同workloadId的pod状态
 	podStates := make(map[string][]string)
-	for _, pod := range gPodListAfterUpdateInfoArea {
+	for _, pod := range podList {
 		// 获取workloadId的最后一部分
 		parts := strings.Split(pod.WorkloadId, ":")
 		workloadName := parts[len(parts)-1]
@@ -61,13 +62,13 @@ func updateInfoAreaForSelectNamespace() {
 		states := podStates[workloadName]
 		info.WriteString(fmt.Sprintf("%s: %s\n", workloadName, strings.Join(states, ",")))
 	}
-	gInfoArea.SetText(info.String())
+	GetInfoArea().SetText(info.String())
 }
 
 // updateInfoAreaForSingleWorkload 更新选择单个工作负载时的信息显示
 func updateInfoAreaForSingleWorkload() {
-	workload := gSelectedWorkloads[0]
-	podList := FilterPodList(workload.Name)
+	workload := GetSelectedWorkloads()[0]
+	podList, _ := GetDb().GetPodsByEnvNamespaceWorkload(workload.Environment, workload.Namespace, workload.Name)
 
 	// 构建信息字符串
 	var info strings.Builder
@@ -107,10 +108,13 @@ func updateInfoAreaForSingleWorkload() {
 	if strings.TrimSpace(workload.Remark) != "" {
 		info.WriteString(fmt.Sprintf("备注: \n%s\n", workload.Remark))
 	}
-	services, err := gDb.GetServicesByWorkload(workload.Environment, workload.ProjectId, workload.Namespace, workload.Name)
+	services, err := GetDb().GetServicesByWorkload(workload.Environment, workload.ProjectId, workload.Namespace, workload.Name)
 	if err == nil && len(services) > 0 {
 		info.WriteString("端口访问:\n")
-		ip := gEnvironment.Ip
+		ip := ""
+		if env := GetEnvironment(); env != nil {
+			ip = env.Ip
+		}
 		for _, port := range services {
 			if port.Kind == "NodePort" {
 				info.WriteString(fmt.Sprintf("  %s    %s    %d->%s:%d\n", port.PortName, port.PortProtocol, port.Port, ip, port.NodePort))
@@ -129,7 +133,7 @@ func updateInfoAreaForSingleWorkload() {
 	}
 	var uploadConfigList []rancher.UploadConfig
 	// 获取完整镜像名称的配置
-	configs, _ := gDb.GetUploadConfigsByImage(workload.Image)
+	configs, _ := GetDb().GetUploadConfigsByImage(workload.Image)
 	uploadConfigList = append(uploadConfigList, configs...)
 
 	// 获取不带标签的镜像名称的配置
@@ -139,7 +143,7 @@ func updateInfoAreaForSingleWorkload() {
 		image = workload.Image[:colonIndex]
 		tag = workload.Image[colonIndex+1:]
 	}
-	configs1, _ := gDb.GetUploadConfigsByImageLikeSpecial1(image)
+	configs1, _ := GetDb().GetUploadConfigsByImageLikeSpecial1(image)
 	uploadConfigList = append(uploadConfigList, configs1...)
 	// 获取最后两个/之间的部分
 	imageDir := ""
@@ -153,7 +157,7 @@ func updateInfoAreaForSingleWorkload() {
 	if lastSlashIndex := strings.LastIndex(image, "/"); lastSlashIndex >= 0 {
 		image = image[lastSlashIndex+1:]
 	}
-	configs2, _ := gDb.GetUploadConfigsByImageLikeSpecial2(image)
+	configs2, _ := GetDb().GetUploadConfigsByImageLikeSpecial2(image)
 	uploadConfigList = append(uploadConfigList, configs2...)
 	// 对uploadConfigList进行排序
 	sort.Slice(uploadConfigList, func(i, j int) bool {
@@ -219,39 +223,36 @@ func updateInfoAreaForSingleWorkload() {
 			info.WriteString("\n")
 		}
 	}
-	gInfoArea.SetText(info.String())
+	GetInfoArea().SetText(info.String())
 }
 
 // updateInfoAreaForSelectMultiWorkload 更新选择多个工作负载时的信息显示
 func updateInfoAreaForSelectMultiWorkload() {
+	ns := GetSelectedNamespace()
+	workloads := GetSelectedWorkloads()
+	podList, _ := GetDb().GetPodsByEnvNamespace(ns.Environment, ns.Name)
+	gPodListAfterUpdateInfoArea = podList
+	GPodStateMapAfterUpdateInfoArea = GetPodStateMap(podList)
+
 	var info strings.Builder
-	// todo 修复gEnvironment偶尔为null导致闪退
-	info.WriteString(fmt.Sprintf("环境: %s\n", gEnvironment.Name))
-	info.WriteString(fmt.Sprintf("命名空间: %s\n", gSelectedNamespace.Name))
-	info.WriteString(fmt.Sprintf("项目: %s\n", gSelectedNamespace.Project))
-	info.WriteString(fmt.Sprintf("描述: %s\n", gSelectedNamespace.Description))
-	info.WriteString(fmt.Sprintf("pod数量: %d\n", len(gPodListAfterUpdateInfoArea)))
-	// 创建一个map来存储相同workloadId的pod状态
+	env := GetEnvironment()
+	if env != nil {
+		info.WriteString(fmt.Sprintf("环境: %s\n", env.Name))
+	}
+	info.WriteString(fmt.Sprintf("命名空间: %s\n", ns.Name))
+	info.WriteString(fmt.Sprintf("项目: %s\n", ns.Project))
+	info.WriteString(fmt.Sprintf("描述: %s\n", ns.Description))
+	info.WriteString(fmt.Sprintf("pod数量: %d\n", len(podList)))
+
 	podStates := make(map[string][]string)
-	for _, pod := range gPodListAfterUpdateInfoArea {
-		// 获取workloadId的最后一部分
+	for _, pod := range podList {
 		parts := strings.Split(pod.WorkloadId, ":")
 		workloadName := parts[len(parts)-1]
 		podStates[workloadName] = append(podStates[workloadName], pod.State)
 	}
 
-	keys := make([]string, 0, len(podStates))
-	for k := range podStates {
-		keys = append(keys, k)
-	}
-
-	sort.Strings(keys)
-
-	// 复制一份，不影响原 slice
-	sortedWorkloads := make([]rancher.Workload, len(gSelectedWorkloads))
-	copy(sortedWorkloads, gSelectedWorkloads)
-
-	// 按 Name 排序
+	sortedWorkloads := make([]rancher.Workload, len(workloads))
+	copy(sortedWorkloads, workloads)
 	sort.Slice(sortedWorkloads, func(i, j int) bool {
 		return sortedWorkloads[i].Name < sortedWorkloads[j].Name
 	})
@@ -260,7 +261,7 @@ func updateInfoAreaForSelectMultiWorkload() {
 		states := podStates[workload.Name]
 		info.WriteString(fmt.Sprintf("%s: %s\n", workload.Name, strings.Join(states, ",")))
 	}
-	gInfoArea.SetText(info.String())
+	GetInfoArea().SetText(info.String())
 }
 
 func FilterPodList(name string) []rancher.Pod {

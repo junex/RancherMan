@@ -8,15 +8,13 @@ import (
 
 // UI组件全局变量
 var (
-	gNamespaceList    *widget.List
-	gNamespaceSearch  *widget.Entry
-	gWorkloadList     *component.MultiSelectList
-	gWorkloadSearch   *widget.Entry
-	gInfoArea         *widget.Entry
-	gApp              fyne.App
-	gTaskStatusBar    *component.TaskStatusBar
-	gOperationButtons []*widget.Button
-	gInfoAreaStatus   InfoAreaStatus = InfoAreaStatusInfo // 默认显示信息
+	gNamespaceList   *widget.List
+	gNamespaceSearch *widget.Entry
+	gWorkloadList    *component.MultiSelectList
+	gWorkloadSearch  *widget.Entry
+	gInfoArea        *widget.Entry
+	gApp             fyne.App
+	gInfoAreaStatus  InfoAreaStatus = InfoAreaStatusInfo // 默认显示信息
 )
 
 // InfoAreaStatus 信息区域状态
