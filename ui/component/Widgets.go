@@ -119,6 +119,11 @@ func (t *MultiSelectList) RefreshList() {
 	}
 }
 
+// RefreshAllItems 刷新列表全部可见项，不改变滚动位置
+func (t *MultiSelectList) RefreshAllItems() {
+	t.BaseWidget.Refresh()
+}
+
 func (t *MultiSelectList) IsSelected(pos int) bool {
 	return t.selectedIds[pos] != struct{}{}
 }

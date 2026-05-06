@@ -461,5 +461,10 @@ func selectNamespace(namespace rancher.Namespace) {
 func UpdateInfoArea() {
 	if gInfoAreaStatus == InfoAreaStatusInfo {
 		operations.UpdateInfoArea()
+		fyne.Do(func() {
+			if gWorkloadList != nil {
+				gWorkloadList.RefreshAllItems()
+			}
+		})
 	}
 }
