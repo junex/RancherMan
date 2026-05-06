@@ -34,14 +34,14 @@ func InitView() InitResult {
 	mainMenu := fyne.NewMainMenu(
 		fyne.NewMenu("配置",
 			fyne.NewMenuItem("保存配置", func() {
-				var content = operations.GetInfoArea().Text()
-				rancher.SaveConfigToDb(operations.GetDb(), content)
+				content := operations.GetInfoArea().Text()
+				operations.SaveConfig(content)
 				operations.LoadConfig(true)
 				gInfoAreaStatus = InfoAreaStatusInfo
 			}),
 			fyne.NewMenuItem("显示配置", func() {
 				gInfoAreaStatus = InfoAreaStatusConfig
-				configContent, _ := operations.GetDb().GetConfigContent(1)
+				configContent, _ := operations.GetConfigContent()
 				operations.GetInfoArea().SetText(configContent)
 			}),
 		),
@@ -58,7 +58,7 @@ func InitView() InitResult {
 					// 如果没有选中环境，则更新所有环境
 					config := operations.GetConfig()
 					for envName, _ := range config["environment"].(map[string]interface{}) {
-						environment, _ := rancher.GetEnvironmentFromConfig(config, envName)
+						environment, _ := operations.GetEnvironmentFromConfig(config, envName)
 						operations.UpdateDataTask(environment, db, taskQueue)
 					}
 				}
@@ -76,7 +76,7 @@ func InitView() InitResult {
 					// 如果没有选中环境，则更新所有环境
 					config := operations.GetConfig()
 					for envName, _ := range config["environment"].(map[string]interface{}) {
-						environment, _ := rancher.GetEnvironmentFromConfig(config, envName)
+						environment, _ := operations.GetEnvironmentFromConfig(config, envName)
 						operations.UpdatePortMapTask(environment, db, taskQueue)
 					}
 				}
@@ -101,22 +101,22 @@ func InitView() InitResult {
 		),
 		fyne.NewMenu("克隆和导出",
 			fyne.NewMenuItem("导出configMap", func() {
-				ShowSelectNamespaceDialog(myWindow, operations.GetDb(), false, func(destNamespace rancher.Namespace, tag string) {
+				ShowSelectNamespaceDialog(myWindow, false, func(destNamespace rancher.Namespace, tag string) {
 					operations.CloneOrExportConfigMap(false, destNamespace)
 				})
 			}),
 			fyne.NewMenuItem("克隆configMap", func() {
-				ShowSelectNamespaceDialog(myWindow, operations.GetDb(), true, func(destNamespace rancher.Namespace, tag string) {
+				ShowSelectNamespaceDialog(myWindow, true, func(destNamespace rancher.Namespace, tag string) {
 					operations.CloneOrExportConfigMap(true, destNamespace)
 				})
 			}),
 			fyne.NewMenuItem("导出workload", func() {
-				ShowSelectNamespaceDialog(myWindow, operations.GetDb(), true, func(destNamespace rancher.Namespace, tag string) {
+				ShowSelectNamespaceDialog(myWindow, true, func(destNamespace rancher.Namespace, tag string) {
 					operations.CloneOrExportWorkload(false, destNamespace, tag)
 				})
 			}),
 			fyne.NewMenuItem("克隆workload", func() {
-				ShowSelectNamespaceDialog(myWindow, operations.GetDb(), true, func(destNamespace rancher.Namespace, tag string) {
+				ShowSelectNamespaceDialog(myWindow, true, func(destNamespace rancher.Namespace, tag string) {
 					operations.CloneOrExportWorkload(true, destNamespace, tag)
 				})
 			}),
@@ -436,10 +436,9 @@ func InitView() InitResult {
 func selectNamespace(namespace rancher.Namespace) {
 	operations.SetSelectedNamespace(namespace)
 
-	db := operations.GetDb()
 	config := operations.GetConfig()
 
-	environment, _ := rancher.GetEnvironmentFromConfig(config, namespace.Environment)
+	environment, _ := operations.GetEnvironmentFromConfig(config, namespace.Environment)
 	operations.SetEnvironment(environment)
 
 	log.Printf("[selectNamespace] Selected namespace: %s, gEnvironment=%v", namespace.Name, environment != nil)
@@ -447,7 +446,7 @@ func selectNamespace(namespace rancher.Namespace) {
 		log.Printf("[selectNamespace] Environment: Name=%s, ID=%s", environment.Name, environment.ID)
 	}
 
-	workloads, _ := db.GetWorkloadsByNamespace(namespace.Name)
+	workloads, _ := operations.GetWorkloadsByNamespace(namespace.Name)
 	operations.SetWorkloads(workloads)
 	log.Printf("[selectNamespace] Loaded %d workloads", len(workloads))
 

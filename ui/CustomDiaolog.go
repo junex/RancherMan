@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"RancherMan/operations"
 	"RancherMan/rancher"
 	"strings"
 
@@ -11,12 +12,12 @@ import (
 )
 
 // 添加新的函数来创建和显示自定义对话框
-func ShowSelectNamespaceDialog(window fyne.Window, db *rancher.DatabaseManager, needNewTag bool, onSelect func(namespace rancher.Namespace, tag string)) {
+func ShowSelectNamespaceDialog(window fyne.Window, needNewTag bool, onSelect func(namespace rancher.Namespace, tag string)) {
 	// 创建搜索框
 	searchEntry := widget.NewEntry()
 	searchEntry.SetPlaceHolder("搜索命名空间...")
 
-	namespaces, _ := db.GetAllNamespacesDetail()
+	namespaces, _ := operations.GetAllNamespacesDetail()
 	// 添加一个变量来存储过滤后的命名空间
 	filteredNamespaces := namespaces
 	selectedNamespace := rancher.Namespace{}

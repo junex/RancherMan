@@ -311,3 +311,40 @@ func InitData() {
 		})
 	}
 }
+
+// GetEnvironmentFromConfig 根据环境名称从配置中获取环境信息
+func GetEnvironmentFromConfig(config map[string]interface{}, envName string) (*rancher.Environment, error) {
+	return rancher.GetEnvironmentFromConfig(config, envName)
+}
+
+// SaveConfig 保存配置到数据库
+func SaveConfig(content string) {
+	appState.mu.RLock()
+	db := appState.Db
+	appState.mu.RUnlock()
+	rancher.SaveConfigToDb(db, content)
+}
+
+// GetConfigContent 获取配置内容
+func GetConfigContent() (string, error) {
+	appState.mu.RLock()
+	db := appState.Db
+	appState.mu.RUnlock()
+	return db.GetConfigContent(1)
+}
+
+// GetWorkloadsByNamespace 根据命名空间获取工作负载列表
+func GetWorkloadsByNamespace(namespace string) ([]rancher.Workload, error) {
+	appState.mu.RLock()
+	db := appState.Db
+	appState.mu.RUnlock()
+	return db.GetWorkloadsByNamespace(namespace)
+}
+
+// GetAllNamespacesDetail 获取所有命名空间详细信息
+func GetAllNamespacesDetail() ([]rancher.Namespace, error) {
+	appState.mu.RLock()
+	db := appState.Db
+	appState.mu.RUnlock()
+	return db.GetAllNamespacesDetail()
+}
