@@ -104,7 +104,6 @@ func (tq *TaskQueue) AddTask(task *Task) int {
 	log.Printf("[AddTask] ENTRY: Trying to acquire lock...")
 	tq.mu.Lock()
 	log.Printf("[AddTask] Lock acquired!")
-	defer tq.mu.Unlock()
 
 	// 第一个任务添加时，重置取消标志
 	if tq.cancelRequested {
@@ -121,6 +120,9 @@ func (tq *TaskQueue) AddTask(task *Task) int {
 
 	tq.tasks = append(tq.tasks, task)
 	log.Printf("[AddTask] Task ID=%d, Type=%d, Description=%s", task.ID, task.Type, task.Description)
+	tq.mu.Unlock()
+
+	// channel 发送在锁外进行，避免 buffer 满时持锁阻塞导致死锁
 	tq.taskChan <- task
 	return task.ID
 }
