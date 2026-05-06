@@ -112,16 +112,12 @@ func (t *MultiSelectList) UnMultiSelectedOne(id widget.ListItemID) {
 
 func (t *MultiSelectList) RefreshList() {
 	t.ScrollToTop()
-	for i := range t.Length() {
-		if i < 10 {
-			t.RefreshItem(i)
-		}
-	}
+	t.list.Refresh()
 }
 
 // RefreshAllItems 刷新列表全部可见项，不改变滚动位置
 func (t *MultiSelectList) RefreshAllItems() {
-	t.BaseWidget.Refresh()
+	t.list.Refresh()
 }
 
 func (t *MultiSelectList) IsSelected(pos int) bool {

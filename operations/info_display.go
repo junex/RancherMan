@@ -15,9 +15,20 @@ var GPodStateMapAfterUpdateInfoArea map[string]string
 // UpdateInfoArea 根据选择的状态更新信息区域
 func UpdateInfoArea() {
 	workloads := GetSelectedWorkloads()
-	if len(workloads) == 0 && GetSelectedNamespace().Name == "" {
+	ns := GetSelectedNamespace()
+	if len(workloads) == 0 && ns.Name == "" {
 		GetInfoArea().SetText("")
-	} else if len(workloads) == 0 {
+		return
+	}
+
+	// 始终更新 Pod 状态映射，供工作负载列表着色使用
+	if ns.Name != "" {
+		podList, _ := GetDb().GetPodsByEnvNamespace(ns.Environment, ns.Name)
+		gPodListAfterUpdateInfoArea = podList
+		GPodStateMapAfterUpdateInfoArea = GetPodStateMap(podList)
+	}
+
+	if len(workloads) == 0 {
 		updateInfoAreaForSelectNamespace()
 	} else if len(workloads) == 1 {
 		updateInfoAreaForSingleWorkload()
@@ -29,9 +40,7 @@ func UpdateInfoArea() {
 // updateInfoAreaForSelectNamespace 更新选择命名空间时的信息显示
 func updateInfoAreaForSelectNamespace() {
 	ns := GetSelectedNamespace()
-	podList, _ := GetDb().GetPodsByEnvNamespace(ns.Environment, ns.Name)
-	gPodListAfterUpdateInfoArea = podList
-	GPodStateMapAfterUpdateInfoArea = GetPodStateMap(podList)
+	podList := gPodListAfterUpdateInfoArea
 
 	var info strings.Builder
 	env := GetEnvironment()
@@ -230,9 +239,7 @@ func updateInfoAreaForSingleWorkload() {
 func updateInfoAreaForSelectMultiWorkload() {
 	ns := GetSelectedNamespace()
 	workloads := GetSelectedWorkloads()
-	podList, _ := GetDb().GetPodsByEnvNamespace(ns.Environment, ns.Name)
-	gPodListAfterUpdateInfoArea = podList
-	GPodStateMapAfterUpdateInfoArea = GetPodStateMap(podList)
+	podList := gPodListAfterUpdateInfoArea
 
 	var info strings.Builder
 	env := GetEnvironment()

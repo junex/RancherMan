@@ -1,9 +1,10 @@
 package ui
 
 import (
-	"fyne.io/fyne/v2/canvas"
 	"image/color"
 	"log"
+
+	"fyne.io/fyne/v2/canvas"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/app"
@@ -459,12 +460,12 @@ func selectNamespace(namespace rancher.Namespace) {
 }
 
 func UpdateInfoArea() {
-	if gInfoAreaStatus == InfoAreaStatusInfo {
-		operations.UpdateInfoArea()
-		fyne.Do(func() {
-			if gWorkloadList != nil {
-				gWorkloadList.RefreshAllItems()
-			}
-		})
-	}
+	fyne.Do(func() {
+		if gInfoAreaStatus == InfoAreaStatusInfo {
+			operations.UpdateInfoArea()
+		}
+		if gWorkloadList != nil {
+			gWorkloadList.RefreshAllItems()
+		}
+	})
 }
