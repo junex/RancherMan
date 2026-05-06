@@ -12,10 +12,10 @@ import (
 
 // Workload 工作负载模型
 type Workload struct {
-	ID                   string `gorm:"size:100:primaryKey"`
-	Environment          string `gorm:"size:20"`
+	ID                   string `gorm:"size:100;primaryKey"`
+	Environment          string `gorm:"size:20;index"`
 	ProjectId            string `gorm:"size:20"`
-	Namespace            string `gorm:"size:50"`
+	Namespace            string `gorm:"size:50;index"`
 	Name                 string `gorm:"size:30"`
 	Image                string `gorm:"size:100"`
 	ImagePullPolicy      string `gorm:"size:20"`
@@ -40,10 +40,10 @@ func (Config) TableName() string {
 
 // Namespace 命名空间模型
 type Namespace struct {
-	ID          string `gorm:"size:50:primaryKey"`
+	ID          string `gorm:"size:50;primaryKey"`
 	Name        string `gorm:"size:30"`
 	Project     string `gorm:"size:30"`
-	Environment string `gorm:"size:20"`
+	Environment string `gorm:"size:20;index"`
 	Description string `gorm:"size:30"`
 }
 
@@ -53,11 +53,11 @@ func (Namespace) TableName() string {
 
 // Pod 模型
 type Pod struct {
-	ID          string `gorm:"size:100:primaryKey"`
-	Environment string `gorm:"size:20"`
+	ID          string `gorm:"size:100;primaryKey"`
+	Environment string `gorm:"size:20;index"`
 	ProjectId   string `gorm:"size:20"`
-	NamespaceId string `gorm:"size:20"`
-	WorkloadId  string `gorm:"size:80"`
+	NamespaceId string `gorm:"size:20;index"`
+	WorkloadId  string `gorm:"size:80;index"`
 	State       string `gorm:"size:10"`
 }
 
@@ -81,7 +81,7 @@ func (UploadConfig) TableName() string {
 // Service 服务模型
 type Service struct {
 	ID           uint   `gorm:"primaryKey"`
-	Environment  string `gorm:"size:20"`
+	Environment  string `gorm:"size:20;index"`
 	ProjectId    string `gorm:"size:20"`
 	NamespaceId  string `gorm:"size:20"`
 	Name         string `gorm:"size:20"`
