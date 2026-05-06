@@ -134,6 +134,12 @@ func NewDatabaseManager(dbFile string) (*DatabaseManager, error) {
 		return nil, fmt.Errorf("打开数据库失败: %v", err)
 	}
 
+	// SQLite 性能优化 pragma
+	db.Exec("PRAGMA journal_mode=WAL")
+	db.Exec("PRAGMA synchronous=NORMAL")
+	db.Exec("PRAGMA cache_size=-8000")
+	db.Exec("PRAGMA busy_timeout=5000")
+
 	dm := &DatabaseManager{
 		db:     db,
 		dbFile: dbFile,
@@ -199,12 +205,7 @@ func (dm *DatabaseManager) DeleteWorkloadByEnv(environment string) (int64, error
 // InsertWorkloads 批量插入工作负载
 func (dm *DatabaseManager) InsertWorkloads(workloads []Workload) error {
 	return dm.db.Transaction(func(tx *gorm.DB) error {
-		for _, workload := range workloads {
-			if err := tx.Create(&workload).Error; err != nil {
-				return err
-			}
-		}
-		return nil
+		return tx.CreateInBatches(workloads, 100).Error
 	})
 }
 
@@ -246,11 +247,6 @@ func (dm *DatabaseManager) DeleteConfig(id uint) (bool, error) {
 	return result.RowsAffected > 0, nil
 }
 
-// BatchCreateWorkloads 批量创建工作负载的辅助方法
-func (dm *DatabaseManager) BatchCreateWorkloads(workloads []Workload) error {
-	return dm.db.CreateInBatches(workloads, 100).Error
-}
-
 // UpdateWorkload 更新工作负载信息
 func (dm *DatabaseManager) UpdateWorkload(workload *Workload) error {
 	return dm.db.Save(workload).Error
@@ -284,12 +280,7 @@ func (dm *DatabaseManager) DeleteNamespaceByEnvironment(environment string) (int
 // InsertNamespaces 批量插入命名空间数据
 func (dm *DatabaseManager) InsertNamespaces(namespaces []Namespace) error {
 	return dm.db.Transaction(func(tx *gorm.DB) error {
-		for _, namespace := range namespaces {
-			if err := tx.Create(&namespace).Error; err != nil {
-				return err
-			}
-		}
-		return nil
+		return tx.CreateInBatches(namespaces, 100).Error
 	})
 }
 
@@ -309,12 +300,7 @@ func (dm *DatabaseManager) DeletePodByEnvironment(environment string) (int64, er
 // InsertPods 批量插入pod数据
 func (dm *DatabaseManager) InsertPods(pods []Pod) error {
 	return dm.db.Transaction(func(tx *gorm.DB) error {
-		for _, pod := range pods {
-			if err := tx.Create(&pod).Error; err != nil {
-				return err
-			}
-		}
-		return nil
+		return tx.CreateInBatches(pods, 100).Error
 	})
 }
 
@@ -424,12 +410,7 @@ func (dm *DatabaseManager) DeleteAllUploadConfigs() error {
 // InsertUploadConfigs 批量插入上传配置数据
 func (dm *DatabaseManager) InsertUploadConfigs(configs []UploadConfig) error {
 	return dm.db.Transaction(func(tx *gorm.DB) error {
-		for _, config := range configs {
-			if err := tx.Create(&config).Error; err != nil {
-				return err
-			}
-		}
-		return nil
+		return tx.CreateInBatches(configs, 100).Error
 	})
 }
 
@@ -472,11 +453,6 @@ func (dm *DatabaseManager) DeleteServiceByEnvironment(environment string) (int64
 // InsertServices 批量插入服务数据
 func (dm *DatabaseManager) InsertServices(services []Service) error {
 	return dm.db.Transaction(func(tx *gorm.DB) error {
-		for _, service := range services {
-			if err := tx.Create(&service).Error; err != nil {
-				return err
-			}
-		}
-		return nil
+		return tx.CreateInBatches(services, 100).Error
 	})
 }
