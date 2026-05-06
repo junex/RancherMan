@@ -39,16 +39,48 @@ func ParseNginxConfig(baseURL string, configText string) ([]ConfigEntry, error) 
 	configStr := strings.Join(lines, " ")
 
 	// 编译正则表达式
-	locationRegex := regexp.MustCompile(`location\s+([^{]+?)\s*{([^}]+)}`)
+	locRegex := regexp.MustCompile(`location\s+([^{]+?)\s*\{`)
 	proxyRegex := regexp.MustCompile(`proxy_pass\s+http://([^:/]+)[.]([^:/]+):(\d+)`)
 
-	// 查找所有location块
-	locationMatches := locationRegex.FindAllStringSubmatch(configStr, -1)
-
 	results := make([]ConfigEntry, 0)
-	for _, match := range locationMatches {
-		locationPath := strings.TrimSpace(match[1])
-		blockContent := match[2]
+	searchStart := 0
+
+	for {
+		// 找到下一个 location 指令
+		locMatch := locRegex.FindStringSubmatchIndex(configStr[searchStart:])
+		if locMatch == nil {
+			break
+		}
+
+		locationPath := strings.TrimSpace(configStr[searchStart+locMatch[2] : searchStart+locMatch[3]])
+
+		// locMatch[1] 是完整匹配结束位置，最后一个字符就是 {
+		bracePos := searchStart + locMatch[1] - 1
+
+		// 括号计数，找到匹配的 }
+		depth := 0
+		contentStart := bracePos + 1
+		i := bracePos
+		for i < len(configStr) {
+			switch configStr[i] {
+			case '{':
+				depth++
+			case '}':
+				depth--
+				if depth == 0 {
+					break
+				}
+			}
+			i++
+		}
+
+		if depth != 0 {
+			// 没找到匹配的 }，跳过这个异常的 location
+			searchStart = bracePos + 1
+			continue
+		}
+
+		blockContent := strings.TrimSpace(configStr[contentStart:i])
 
 		// 在块内容中查找proxy_pass
 		proxyMatch := proxyRegex.FindStringSubmatch(blockContent)
@@ -57,6 +89,7 @@ func ParseNginxConfig(baseURL string, configText string) ([]ConfigEntry, error) 
 			domain := proxyMatch[2]
 			port, err := strconv.Atoi(proxyMatch[3])
 			if err != nil {
+				searchStart = i + 1
 				continue // 跳过无效的端口号
 			}
 
@@ -69,6 +102,9 @@ func ParseNginxConfig(baseURL string, configText string) ([]ConfigEntry, error) 
 			}
 			results = append(results, entry)
 		}
+
+		// 从 { 后继续搜索，确保嵌套 location 也能被找到
+		searchStart = bracePos + 1
 	}
 
 	return results, nil
