@@ -10,7 +10,25 @@ import (
 	"log"
 	"net/http"
 	"strings"
+	"sync"
 )
+
+var (
+	httpClient     *http.Client
+	httpClientOnce sync.Once
+)
+
+// getHTTPClient 返回共享的 HTTP Client，复用 TCP 连接
+func getHTTPClient() *http.Client {
+	httpClientOnce.Do(func() {
+		httpClient = &http.Client{
+			Transport: &http.Transport{
+				TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+			},
+		}
+	})
+	return httpClient
+}
 
 type Resource struct {
 	ID          string
@@ -69,7 +87,6 @@ func makeProjectRequest(ctx context.Context, environment Environment, method, ur
 func makeRequest(ctx context.Context, environment Environment, method, url string, payload []byte, accept string) (*http.Response, error) {
 	baseURL := environment.BaseURL
 	fullURL := fmt.Sprintf("%s/%s", baseURL, url)
-	client := &http.Client{Transport: &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: true}}}
 	var body io.Reader
 	if payload != nil {
 		body = strings.NewReader(string(payload))
@@ -83,7 +100,7 @@ func makeRequest(ctx context.Context, environment Environment, method, url strin
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.SetBasicAuth(environment.username, environment.password)
-	return client.Do(req)
+	return getHTTPClient().Do(req)
 }
 
 func Scale(ctx context.Context, environment Environment, namespace string, workload string, replicas int) (bool, error) {
