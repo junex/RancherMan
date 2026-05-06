@@ -7,12 +7,15 @@ import (
 
 // entryAdapter 包装 *widget.Entry，使其满足 operations.InfoDisplayer 和 operations.TextGetter 接口
 // widget.Entry.Text 是公开字段不是方法，所以必须通过适配器提供 Text() 方法
+// 所有 Fyne widget 操作都通过 fyne.Do 调度到 UI 主线程，确保并发安全
 type entryAdapter struct {
 	entry *widget.Entry
 }
 
 func (a *entryAdapter) SetText(text string) {
-	a.entry.SetText(text)
+	fyne.Do(func() {
+		a.entry.SetText(text)
+	})
 }
 
 func (a *entryAdapter) Text() string {
