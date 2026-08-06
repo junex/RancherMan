@@ -61,6 +61,7 @@ func ParseNginxConfig(baseURL string, configText string) ([]ConfigEntry, error) 
 		depth := 0
 		contentStart := bracePos + 1
 		i := bracePos
+	loop:
 		for i < len(configStr) {
 			switch configStr[i] {
 			case '{':
@@ -68,7 +69,7 @@ func ParseNginxConfig(baseURL string, configText string) ([]ConfigEntry, error) 
 			case '}':
 				depth--
 				if depth == 0 {
-					break
+					break loop
 				}
 			}
 			i++
